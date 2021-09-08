@@ -22,6 +22,7 @@
     `php run.php -a`
 
 ####Command arguments
+
     -d : Download
     -u : Unzip
     -p : Parse
