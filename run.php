@@ -26,7 +26,7 @@ $urls = [
 ];
 
 $conn = \Doctrine\DBAL\DriverManager::getConnection($connectionParams);
-$portion = 2000;
+$portion = $config['TRANSACTION_PORTION'] ?? 2000;
 $out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . "/exchange/";
 
 class Args {
