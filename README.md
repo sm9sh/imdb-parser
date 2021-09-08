@@ -1,5 +1,5 @@
 # imdb-parser
-####Simple parser for IMDB datasets (https://datasets.imdbws.com/) to mysql database
+**Simple parser for IMDB datasets (https://datasets.imdbws.com/) to mysql database**
 
 1. Create mysql database.
 
@@ -21,7 +21,7 @@
 
     `php run.php -a`
 
-####Command arguments
+**Command arguments**
 
     -d : Download
     -u : Unzip
