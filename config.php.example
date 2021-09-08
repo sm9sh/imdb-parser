@@ -1,0 +1,7 @@
+<?php
+
+return [
+    'DATABASE_URL' => 'mysql://root:root@localhost/imdb',
+    'TRANSACTION_PORTION' => 2000,
+    'DOWNLOAD_DIR' => __DIR__ . '/exchange/',
+];
