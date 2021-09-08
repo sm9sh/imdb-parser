@@ -1,5 +1,5 @@
 {
-    "name": "sm9sh/imdb",
+    "name": "sm9sh/imdb-parser",
     "type": "project",
     "require": {
       "php": ">=7.0",
