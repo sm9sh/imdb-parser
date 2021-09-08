@@ -15,17 +15,13 @@ if (empty($config['DATABASE_URL'])) {
     throw new Error('DATABASE_URL param is not defined in config.php');
 }
 
-$connectionParams = array(
-    'url' => $config['DATABASE_URL'],
-);
-
 $urls = [
     'https://datasets.imdbws.com/title.basics.tsv.gz',  // movie titles
     'https://datasets.imdbws.com/title.ratings.tsv.gz', // movie ratings
 //    'https://datasets.imdbws.com/name.basics.tsv.gz',   // names of actors
 ];
 
-$conn = \Doctrine\DBAL\DriverManager::getConnection($connectionParams);
+$conn = \Doctrine\DBAL\DriverManager::getConnection(['url' => $config['DATABASE_URL']]);
 $portion = $config['TRANSACTION_PORTION'] ?? 2000;
 $out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . "/exchange/";
 
@@ -209,8 +205,7 @@ if ($a->is_parse) {
                     list($tconst, $averageRating, $numVotes) = $data;
                     $conn->update('title',
                         ['averageRating' => $averageRating, 'numVotes' => $numVotes],
-                        ['tconst' => $tconst])
-                    ;
+                        ['tconst' => $tconst]);
                 }
 
 
