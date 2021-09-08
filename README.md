@@ -11,13 +11,17 @@
 
     `cd imdb-parser`
 
-4. Run to copy `config.php.example` to `config.php`:
+4. Run to install dependencies
+
+    `composer update`
+
+5. Run to copy `config.php.example` to `config.php`:
 
     `php run.php`
 
-5. Setup your database and dir in `config.php`
+6. Setup your database and dir in `config.php`
 
-6. Run to parse
+7. Run to parse
 
     `php run.php -a`
 
