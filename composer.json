@@ -5,10 +5,10 @@
     "description": "Simple parser for free IMDB datasets to mysql database",
     "license": "MIT",
     "require": {
-      "php": ">=7.0",
-      "doctrine/dbal": "^2.13",
-      "ext-curl": "*",
-      "ext-zlib": "*"
+        "php": ">=7.0",
+        "doctrine/dbal": "^2.13",
+        "ext-curl": "*",
+        "ext-zlib": "*"
     },
     "authors": [
         {
@@ -16,5 +16,7 @@
             "email": "sm9sh@i.ua"
         }
     ],
-    "minimum-stability": "dev"
+    "scripts": {
+        "post-create-project-cmd": ["php run.php"]
+    }
 }

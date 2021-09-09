@@ -1,31 +1,38 @@
 # imdb-parser
 **Simple parser for free IMDB datasets (https://datasets.imdbws.com/) to mysql database**
 
-1. Create mysql database.
+Before installing you must create mysql database.
 
-2. Copy repository:
+**Install via composer:**
+
+- Run `composer create-project sm9sh/imdb-parser`
+
+**Install from github:**
+
+1. Copy repository:
 
     `git clone https://github.com/sm9sh/imdb-parser`
 
-3. Enter to dir:
+2. Enter to dir:
 
     `cd imdb-parser`
 
-4. Run to install dependencies
+3. Run to install dependencies
 
     `composer update`
 
-5. Run to copy `config.php.example` to `config.php`:
+4. Run to copy `config.php.example` to `config.php`:
 
     `php run.php`
 
-6. Setup your database and dir in `config.php`
+**Next steps:**
+- Setup your database and working dir in `config.php`
 
-7. Run to parse
+- Run to parse
 
     `php run.php -a`
 
-**Command arguments**
+**Command arguments:**
 
     -d : Download
     -u : Unzip
