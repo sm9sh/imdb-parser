@@ -8,7 +8,7 @@ if (file_exists($cfg_fname)) {
 }
 else {
     copy($cfg_fname . '.example', $cfg_fname);
-    echo "!!!Setup your config.php!!!\n";
+    echo "!!!Setup your config.php!!!\n"; exit;
 }
 
 if (empty($config['DATABASE_URL'])) {
