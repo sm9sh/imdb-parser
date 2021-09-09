@@ -1,5 +1,5 @@
 # imdb-parser
-**Simple parser for IMDB datasets (https://datasets.imdbws.com/) to mysql database**
+**Simple parser for free IMDB datasets (https://datasets.imdbws.com/) to mysql database**
 
 1. Create mysql database.
 

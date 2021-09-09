@@ -2,6 +2,8 @@
     "name": "sm9sh/imdb-parser",
     "type": "project",
     "keywords": ["imdb", "parser"],
+    "description": "Simple parser for free IMDB datasets to mysql database",
+    "license": "MIT",
     "require": {
       "php": ">=7.0",
       "doctrine/dbal": "^2.13",
