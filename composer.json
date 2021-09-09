@@ -1,6 +1,7 @@
 {
     "name": "sm9sh/imdb-parser",
     "type": "project",
+    "keywords": ["imdb", "parser"],
     "require": {
       "php": ">=7.0",
       "doctrine/dbal": "^2.13",
@@ -12,5 +13,6 @@
             "name": "sm9sh",
             "email": "sm9sh@i.ua"
         }
-    ]
+    ],
+    "minimum-stability": "dev"
 }
