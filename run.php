@@ -57,7 +57,6 @@ class Args {
                 case '-a':
                     $this->is_download = true;
                     $this->is_unzip = true;
-                    $this->is_truncate_table = true;
                     $this->is_parse = true;
                     break;
             }
@@ -169,6 +168,7 @@ $conn->executeQuery("
       `genres` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
       `averageRating` float NOT NULL,
       `numVotes` int(10) unsigned NOT NULL,
+      `updated` datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (`tconst`),
       KEY `averageRating` (`averageRating`),
       KEY `endYear` (`endYear`),      
@@ -176,7 +176,7 @@ $conn->executeQuery("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ");
 
-if ($a->is_parse && $a->is_truncate_table) {
+if ($a->is_truncate_table) {
     echo "Truncating db table 'title' ...\n";
     $conn->executeQuery('TRUNCATE TABLE title');
 }
@@ -196,18 +196,27 @@ if ($a->is_parse) {
                     continue;
                 }
 
-
                 if ($fname === 'title.basics.tsv' && count($fields) === count($data)) {
-                    $conn->insert('title', array_combine($fields, $data));
+                    $d = array_combine($fields, $data);
+                    $d['updated'] = date('Y-m-d H:i:s');
+                    $_d = $d;
+                    unset($_d['tconst']);
+                    $affected_rows = $conn->update('title',
+                        $_d,
+                        ['tconst' => $d['tconst']]
+                    );
+                    if (!$affected_rows) {
+                        $conn->insert('title', $d);
+                    }
                 }
 
-                if ($fname === 'title.basics.tsv') {
+                if ($fname === 'title.ratings.tsv') {
                     list($tconst, $averageRating, $numVotes) = $data;
                     $conn->update('title',
                         ['averageRating' => $averageRating, 'numVotes' => $numVotes],
-                        ['tconst' => $tconst]);
+                        ['tconst' => $tconst]
+                    );
                 }
-
 
                 if ($cnt % $portion === 0) {
                     $conn->commit();
