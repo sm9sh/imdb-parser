@@ -21,10 +21,6 @@ Before installing you must create mysql database.
 
     `composer update`
 
-4. Run to copy `config.php.example` to `config.php`:
-
-    `php run.php`
-
 **Next steps:**
 - Setup your database and working dir in `config.php`
 
