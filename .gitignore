@@ -1,0 +1,10 @@
+/config.php
+/vendor/
+/exchange/
+/.idea/
+/composer.lock
+/composer.phar
+/composer_.lock
+/.superpowers/
+/tests/.tmp-*/
+*.part-*

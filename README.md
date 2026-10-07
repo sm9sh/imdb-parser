@@ -52,3 +52,7 @@ SQLite is the default backend. Enable PDO SQLite; `db/imdb.sqlite` and its direc
 **SQLite integration test:**
 
 Run `php tests/SqliteTest.php`. It imports small fixtures into its own temporary SQLite database, checks repeated import and table clearing, then removes its temporary files.
+
+**Test suite and version policy:**
+
+Run `php tests/run.php` (no network or MySQL). PHP 8.2+ and SQLite 3.24.0+ are required; tested on PHP 8.2.34 / SQLite 3.53.4. The CLI keeps `composer.lock` local and untracked. Use `composer install` on a fresh checkout; it resolves the declared constraints. Review dependency changes before updating your local lock.

@@ -37,12 +37,12 @@
 Файли: `composer.json`, `.gitignore`, `tests/run.php`, `tests/*Test.php`, `tests/fixtures/`.
 
 - [x] Узгодити PHP minimum з DBAL і явно вказати потрібні extensions, зокрема PDO SQLite. Вимоги PHP `^8.2`, DBAL `^2.13.9`; platform check пройшов.
-- [ ] Визначити підтримувані PHP та SQLite versions; зафіксувати їх у README. Перевірити SQLite version на окремій test database.
-- [ ] Визначити політику `composer.lock` для цього CLI. Перевірити локальний lockfile перед включенням; не додавати його автоматично.
-- [ ] Ігнорувати `config.php`, `vendor/`, `exchange/`, `.idea/`, локальний `composer.phar` і тимчасові файли.
-- [ ] Додати простий PHP test runner із явними перевірками, які не залежать від налаштування `assert`. Зайві runtime dependencies не додавати.
-- [ ] Створити власні малі fixtures: Unicode, quotes, `\N`, рік `1894`, довгий title, повторний `tconst`, відсутній rating і пошкоджений рядок.
-- [ ] SQLite tests використовують власні тимчасові файли. Runner не використовує робочий `config.php`; можливі MySQL tests потребують окремих test credentials та opt-in.
+- [x] Визначити підтримувані PHP та SQLite versions; зафіксувати їх у README. Перевірити SQLite version на окремій test database.
+- [x] Визначити політику `composer.lock` для цього CLI. Перевірити локальний lockfile перед включенням; не додавати його автоматично.
+- [x] Ігнорувати `config.php`, `vendor/`, `exchange/`, `.idea/`, локальний `composer.phar` і тимчасові файли.
+- [x] Додати простий PHP test runner із явними перевірками, які не залежать від налаштування `assert`. Зайві runtime dependencies не додавати.
+- [x] Створити власні малі fixtures: Unicode, quotes, `\N`, рік `1894`, довгий title, повторний `tconst`, відсутній rating і пошкоджений рядок.
+- [x] SQLite tests використовують власні тимчасові файли. Runner не використовує робочий `config.php`; можливі MySQL tests потребують окремих test credentials та opt-in.
 
 Готово, коли unit tests запускаються без мережі та MySQL, а integration tests фізично відокремлені від робочих даних.
 
