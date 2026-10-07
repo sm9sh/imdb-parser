@@ -99,6 +99,10 @@ function assertSqliteSchema($conn) {
         return;
     }
     $actual = array_column($columns, null, 'name');
+    $primary = array_filter($columns, function ($column) { return (int) $column['pk'] > 0; });
+    if (count($primary) !== 1 || !isset($actual['tconst']) || (int) $actual['tconst']['pk'] !== 1) {
+        throw new RuntimeException('Incompatible title primary key. Back up and migrate explicitly; tconst must be the sole primary key.');
+    }
     $types = array_fill_keys(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'genres'], 'TEXT') +
         array_fill_keys(['isAdult', 'startYear', 'endYear', 'runtimeMinutes', 'numVotes'], 'INTEGER') +
         ['averageRating' => 'REAL', 'updated' => 'DATETIME'];
@@ -151,8 +155,8 @@ function importDataset($conn, $path, $dataset, $portion) {
                 $statement->closeCursor();
             }
             if ($basics) {
-                $values = '(' . implode(', ', array_fill(0, count($fields), '?')) . ', CURRENT_TIMESTAMP)';
-                $sql = 'INSERT INTO title (' . implode(', ', $fields) . ', updated) VALUES ' .
+                $values = '(' . implode(', ', array_fill(0, count($fields), '?')) . ', CURRENT_TIMESTAMP, NULL, NULL)';
+                $sql = 'INSERT INTO title (' . implode(', ', $fields) . ', updated, averageRating, numVotes) VALUES ' .
                     implode(', ', array_fill(0, $count, $values)) .
                     ($sqlite ? ' ON CONFLICT(tconst) DO UPDATE SET ' : ' ON DUPLICATE KEY UPDATE ') .
                     implode(', ', $updates) . ', updated=CURRENT_TIMESTAMP';
