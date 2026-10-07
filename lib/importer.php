@@ -183,3 +183,50 @@ function importDataset($conn, $path, $dataset, $portion) {
     }
 }
 
+
+function ensureSchema($conn, $is_sqlite) {
+if ($is_sqlite) {
+    assertSqliteSchema($conn);
+    $conn->executeQuery("
+        CREATE TABLE IF NOT EXISTS `title` (
+          `tconst` TEXT NOT NULL PRIMARY KEY,
+          `titleType` TEXT NOT NULL,
+          `primaryTitle` TEXT NOT NULL,
+          `originalTitle` TEXT NOT NULL,
+          `isAdult` INTEGER NOT NULL,
+          `startYear` INTEGER DEFAULT NULL,
+          `endYear` INTEGER DEFAULT NULL,
+          `runtimeMinutes` INTEGER DEFAULT NULL,
+          `genres` TEXT DEFAULT NULL,
+          `averageRating` REAL DEFAULT NULL,
+          `numVotes` INTEGER DEFAULT NULL,
+          `updated` DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )
+    ");
+    foreach (['averageRating', 'endYear', 'numVotes'] as $column) {
+        $conn->executeQuery("CREATE INDEX IF NOT EXISTS `title_{$column}` ON `title` (`{$column}`)");
+    }
+}
+else {
+    $conn->executeQuery("
+        CREATE TABLE IF NOT EXISTS `title` (
+          `tconst` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+          `titleType` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+          `primaryTitle` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+          `originalTitle` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+          `isAdult` tinyint(1) NOT NULL,
+          `startYear` year(4) NOT NULL,
+          `endYear` year(4) NOT NULL,
+          `runtimeMinutes` smallint(5) unsigned NOT NULL,
+          `genres` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+          `averageRating` float NOT NULL,
+          `numVotes` int(10) unsigned NOT NULL,
+          `updated` datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          PRIMARY KEY (`tconst`),
+          KEY `averageRating` (`averageRating`),
+          KEY `endYear` (`endYear`),
+          KEY `numVotes` (`numVotes`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+}
