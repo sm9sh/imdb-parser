@@ -47,3 +47,22 @@ First total: 2,776.961 s (46 min 17 s). Repeat total: 3,548.345 s (59 min 8 s). 
 Independent checks after each run matched all source row and NULL counts. The database retained exactly 8,701,401 titles; no duplicates appeared. Both rating fields are present in exactly 1,215,671 titles; no partial rating pairs exist. The Carmencita values above match. SQLite `PRAGMA quick_check` returned `ok` after both runs; database size stayed 1,571,409,920 bytes.
 
 After the repeat, a separate streaming verifier compared every field against source TSV using bounded, parameterized lookup by `tconst`: 9 fields for all 8,701,401 basics rows and 3 fields for all 1,215,671 ratings rows. All values matched, including literal text and normalized numeric/NULL values. Verification took 137.075 s. It does not reuse importer helpers and does not depend on source ordering; these TSV snapshots do not follow SQLite BINARY order for identifiers of different lengths.
+
+## Working database import
+
+The user requested a retry on 2026-10-07. This separate operational run used the same local snapshots and production code at `7e76c75`; it does not change the isolated benchmark above. Before writing, a validated SQLite `VACUUM INTO` backup preserved the empty working database: `db/imdb-before-import-20261007-193755-34767e.sqlite`, 24,576 bytes, 0 titles, `quick_check` = `ok`.
+
+The first `-p` run failed while writing basics: processed 7,028,100, committed 7,028,000, rolled back 100. The retained database passed `quick_check`. Two rollback-only probes of the affected rows succeeded. The original driver code was unavailable after process exit, so the exact cause remains unconfirmed. The retry added failure-chain logging in an owned temporary wrapper; production files, database settings and external applications were unchanged.
+
+The second run restarted from the beginning without `-t` and completed with exit 0 and empty stderr. Existing titles were updated through the same upsert path.
+
+| Dataset | Processed / committed | Unmatched | Data SQL statements | Elapsed | Rows/sec |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Basics | 8,701,401 / 8,701,401 | 0 | 87,015 | 1,574.971 s | 5,524.8 |
+| Ratings | 1,215,671 / 1,215,671 | 0 | 1,215,671 | 1,216.840 s | 999.0 |
+
+Successful retry total: 2,792.608 s (46 min 33 s); PHP peak memory: 4 MiB. These times cover the successful retry only. The retry updated 7,028,000 retained titles and inserted the remainder, so this run is not equivalent to a clean first import.
+
+A separate read-only verifier compared every source field by `tconst`: all 9 basics fields and 3 ratings fields matched. Database totals are 8,701,401 titles and 1,215,671 complete rating pairs, with 0 partial pairs. All four nullable basics counts match the source counts above. Carmencita remains 1894 / 5.7 / 1,858 votes. `PRAGMA quick_check` returned `ok`; working database size is 1,571,422,208 bytes. Verification completed with exit 0 in 583.552 s, including aggregate scans and `quick_check`; it did not reuse importer helpers.
+
+Operational logs, exit codes, backup preflight and full verification JSON are retained locally under `db/import-20261007-b64026fe/`, which is ignored by Git. The owned temporary scripts remain in the ignored `.superpowers/working-import-b64026fe/` directory because automatic approval review rejected the cleanup command. The working database, backup and source datasets remain in place.
