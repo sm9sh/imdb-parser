@@ -56,9 +56,14 @@ function cliMain($arguments) {
         if (!flock($lock, LOCK_EX | LOCK_NB)) {
             throw new RuntimeException('Another importer is running in this project.');
         }
+        $base_url = $config['DATASET_BASE_URL'] ?? 'https://datasets.imdbws.com';
+        if (!is_string($base_url) || !in_array(parse_url($base_url, PHP_URL_SCHEME), ['http', 'https'], true)) {
+            throw new RuntimeException('DATASET_BASE_URL must use HTTP(S).');
+        }
+        $base_url = rtrim($base_url, '/');
         $datasets = [
-            'title.basics.tsv' => 'https://datasets.imdbws.com/title.basics.tsv.gz',
-            'title.ratings.tsv' => 'https://datasets.imdbws.com/title.ratings.tsv.gz',
+            'title.basics.tsv' => $base_url . '/title.basics.tsv.gz',
+            'title.ratings.tsv' => $base_url . '/title.ratings.tsv.gz',
         ];
         if (($actions['-d'] || $actions['-u']) && !is_dir($out_dir) && !@mkdir($out_dir, 0777, true) && !is_dir($out_dir)) {
             throw new RuntimeException('Cannot create DOWNLOAD_DIR.');

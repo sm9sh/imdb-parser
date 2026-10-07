@@ -32,6 +32,10 @@ function testConfig($directory, $settings = []) {
 }
 
 function testCli($directory, ...$arguments) {
+    if (in_array('-d', $arguments, true) || in_array('-a', $arguments, true)) {
+        $settings = require $directory . '/config.php';
+        expect(parse_url($settings['DATASET_BASE_URL'] ?? '', PHP_URL_HOST) === '127.0.0.1', 'HTTP tests must use the local fixture server.');
+    }
     $process = proc_open(array_merge([PHP_BINARY, '-d', 'error_reporting=' . E_ALL, '-d', 'display_errors=1', '-d', 'log_errors=0', $directory . '/run.php'], $arguments), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory);
     expect(is_resource($process), 'Could not start CLI.');
     $stdout = stream_get_contents($pipes[1]);
