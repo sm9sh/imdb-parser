@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/lib/importer.php';
 
 $cfg_fname = __DIR__ . '/config.php';
 if (file_exists($cfg_fname)) {
@@ -164,6 +165,7 @@ foreach ($urls as $url) {
 }
 
 if ($is_sqlite) {
+    assertSqliteSchema($conn);
     $conn->executeQuery("
         CREATE TABLE IF NOT EXISTS `title` (
           `tconst` TEXT NOT NULL PRIMARY KEY,
@@ -218,25 +220,10 @@ if ($a->is_parse) {
         echo "Parsing {$out_dir}{$fname} ...\n";
         $conn->beginTransaction();
         $cnt = 0;
-        if (($handle = fopen($fpath, "r")) !== FALSE) {
-            while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
+        {
+            foreach (readTsv($fpath, $fname) as $d) {
                 $cnt++;
-
-                if ($cnt === 1) {
-                    $fields = $data;
-                    continue;
-                }
-
-                if ($is_sqlite) {
-                    foreach ($data as $key => $value) {
-                        if ($value === '\N') {
-                            $data[$key] = null;
-                        }
-                    }
-                }
-
-                if ($fname === 'title.basics.tsv' && count($fields) === count($data)) {
-                    $d = array_combine($fields, $data);
+                if ($fname === 'title.basics.tsv') {
                     $d['updated'] = date('Y-m-d H:i:s');
                     $_d = $d;
                     unset($_d['tconst']);
@@ -250,7 +237,9 @@ if ($a->is_parse) {
                 }
 
                 if ($fname === 'title.ratings.tsv') {
-                    list($tconst, $averageRating, $numVotes) = $data;
+                    $tconst = $d['tconst'];
+                    $averageRating = $d['averageRating'];
+                    $numVotes = $d['numVotes'];
                     $conn->update('title',
                         ['averageRating' => $averageRating, 'numVotes' => $numVotes],
                         ['tconst' => $tconst]
@@ -263,7 +252,7 @@ if ($a->is_parse) {
                     $conn->beginTransaction();
                 }
             }
-            fclose($handle);
+
             $conn->commit();
         }
         echo "\n$cnt processed\n\n";

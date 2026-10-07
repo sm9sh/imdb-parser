@@ -41,6 +41,10 @@ try {
     mkdir($directory . '/vendor', 0777, true);
     mkdir($directory . '/exchange');
     copy($root . '/run.php', $directory . '/run.php');
+    mkdir($directory . '/lib');
+    foreach (glob($root . '/lib/*.php') as $file) {
+        copy($file, $directory . '/lib/' . basename($file));
+    }
     file_put_contents($directory . '/vendor/autoload.php', '<?php require ' . var_export($root . '/vendor/autoload.php', true) . ';');
     $config = [
         'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', $directory) . '/db/imdb.sqlite',

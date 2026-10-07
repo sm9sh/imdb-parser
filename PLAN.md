@@ -50,11 +50,11 @@
 
 Файли: `run.php`, мінімальний helper `lib/importer.php`, `tests/ParserTest.php`, `tests/ImportTest.php`.
 
-- [ ] Читати повний рядок, зберігати literal quotes, Unicode та порожні кінцеві поля. Перевіряти потрібні headers, дублікати headers і кількість колонок.
-- [ ] Нормалізувати `\N` в `NULL`. Перевіряти числові значення до SQL. Некоректний запис зупиняє імпорт із назвою файлу та номером рядка.
-- [ ] Зберігати роки як nullable integer; nullable numeric fields і ratings не підміняти нулями. Для titles прибрати обмеження 255 characters без обрізання даних.
-- [ ] Зберегти таблицю `title`, ключ `tconst`, назви колонок і потрібні індекси. Не вводити нову модель каталогу.
-- [ ] Перед зміною наявної SQLite schema перевірити сумісність. Якщо потрібна зміна колонок, надати окрему явну міграцію й описати backup. `CREATE TABLE IF NOT EXISTS` не замінює міграцію.
+- [x] Читати повний рядок, зберігати literal quotes, Unicode та порожні кінцеві поля. Перевіряти потрібні headers, дублікати headers і кількість колонок.
+- [x] Нормалізувати `\N` в `NULL`. Перевіряти числові значення до SQL. Некоректний запис зупиняє імпорт із назвою файлу та номером рядка.
+- [x] Зберігати роки як nullable integer; nullable numeric fields і ratings не підміняти нулями. Для titles прибрати обмеження 255 characters без обрізання даних.
+- [x] Зберегти таблицю `title`, ключ `tconst`, назви колонок і потрібні індекси. Не вводити нову модель каталогу.
+- [x] Перед зміною наявної SQLite schema перевірити сумісність. Якщо потрібна зміна колонок, надати окрему явну міграцію й описати backup. `CREATE TABLE IF NOT EXISTS` не замінює міграцію.
 
 Готово, коли fixtures імпортуються у SQLite, `1894` зберігається точно, missing values є `NULL`, довгі назви не обрізаються, а зміни схеми зберігають наявні записи.
 
@@ -132,3 +132,5 @@
 - [IMDb dataset specification](https://data.imdb.com/non-commercial-datasets/): TSV headers, UTF-8, missing-value marker `\N`, поля basics і ratings. Ці datasets мають умови personal/non-commercial use; посилання потрібно зберегти в README.
 - [MySQL YEAR documentation](https://dev.mysql.com/doc/refman/8.4/en/year.html): допустимі роки `1901–2155` та `0000`; поведінка при invalid values залежить від strict SQL mode.
 - Локально перевірено source, tracked files, вимогу PHP у встановленому DBAL, headers і по одному рядку gzip datasets. Повний import під час планування не перевірявся. SQLite integration test додано після зміни backend; MySQL SQL mode не є вимогою основного SQLite import.
+
+Етап 2: SQLite schema не змінюється. PRAGMA перевіряє types, nullability і primary key перед DDL; несумісна схема потребує окремої міграції. Parser tests: 6 сценаріїв RED → GREEN.
