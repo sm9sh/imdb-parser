@@ -32,6 +32,9 @@ if ($is_sqlite && !empty($db_params['path'])) {
     }
 }
 $portion = $config['TRANSACTION_PORTION'] ?? 2000;
+if (!is_int($portion) || $portion < 1) {
+    throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
+}
 $out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . "/exchange/";
 
 class Args {
@@ -215,46 +218,15 @@ if ($a->is_truncate_table) {
 }
 
 if ($a->is_parse) {
-    foreach ($fnames as $fname) {
-        $fpath = $out_dir . $fname;
-        echo "Parsing {$out_dir}{$fname} ...\n";
-        $conn->beginTransaction();
-        $cnt = 0;
-        {
-            foreach (readTsv($fpath, $fname) as $d) {
-                $cnt++;
-                if ($fname === 'title.basics.tsv') {
-                    $d['updated'] = date('Y-m-d H:i:s');
-                    $_d = $d;
-                    unset($_d['tconst']);
-                    $affected_rows = $conn->update('title',
-                        $_d,
-                        ['tconst' => $d['tconst']]
-                    );
-                    if (!$affected_rows) {
-                        $conn->insert('title', $d);
-                    }
-                }
-
-                if ($fname === 'title.ratings.tsv') {
-                    $tconst = $d['tconst'];
-                    $averageRating = $d['averageRating'];
-                    $numVotes = $d['numVotes'];
-                    $conn->update('title',
-                        ['averageRating' => $averageRating, 'numVotes' => $numVotes],
-                        ['tconst' => $tconst]
-                    );
-                }
-
-                if ($cnt % $portion === 0) {
-                    $conn->commit();
-                    echo "$cnt ";
-                    $conn->beginTransaction();
-                }
-            }
-
-            $conn->commit();
+    try {
+        foreach ($fnames as $fname) {
+            validateTsvHeader($out_dir . $fname, $fname);
         }
-        echo "\n$cnt processed\n\n";
+        foreach ($fnames as $fname) {
+            $result = importDataset($conn, $out_dir . $fname, $fname, $portion);
+            echo "$fname: processed={$result['processed']} committed={$result['committed']} unmatched={$result['unmatched']} queries={$result['queries']}\n";
+        }
+    } finally {
+        $conn->close();
     }
 }

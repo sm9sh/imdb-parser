@@ -110,3 +110,76 @@ function assertSqliteSchema($conn) {
         }
     }
 }
+
+function importDataset($conn, $path, $dataset, $portion) {
+    if (!is_int($portion) || $portion < 1) {
+        throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
+    }
+    validateTsvHeader($path, $dataset);
+    $sqlite = $conn->getDatabasePlatform()->getName() === 'sqlite';
+    $fields = datasetFields($dataset);
+    if ($dataset === 'title.basics.tsv') {
+        $columns = implode(', ', $fields);
+        $values = implode(', ', array_fill(0, count($fields), '?'));
+        $updates = [];
+        foreach (array_slice($fields, 1) as $field) {
+            $updates[] = $field . '=' . ($sqlite ? 'excluded.' . $field : 'VALUES(' . $field . ')');
+        }
+        $sql = "INSERT INTO title ($columns, updated) VALUES ($values, CURRENT_TIMESTAMP) " .
+            ($sqlite ? 'ON CONFLICT(tconst) DO UPDATE SET ' : 'ON DUPLICATE KEY UPDATE ') .
+            implode(', ', $updates) . ', updated=CURRENT_TIMESTAMP';
+    } else {
+        $sql = 'UPDATE title SET averageRating=?, numVotes=?, updated=CURRENT_TIMESTAMP WHERE tconst=?';
+    }
+    $statement = $conn->prepare($sql);
+    $exists = !$sqlite && $dataset === 'title.ratings.tsv' ? $conn->prepare('SELECT 1 FROM title WHERE tconst=?') : null;
+    $processed = $committed = $batch = $unmatched = $queries = 0;
+    $started = microtime(true);
+    $last_line = 1;
+    try {
+        foreach (readTsv($path, $dataset) as $number => $row) {
+            $last_line = $number;
+            if (!$conn->isTransactionActive()) {
+                $conn->beginTransaction();
+            }
+            $parameters = $dataset === 'title.basics.tsv'
+                ? array_map(function ($field) use ($row) { return $row[$field]; }, $fields)
+                : [$row['averageRating'], $row['numVotes'], $row['tconst']];
+            $queries++;
+            $statement->execute($parameters);
+            if ($dataset === 'title.ratings.tsv' && $statement->rowCount() === 0) {
+                if ($exists !== null) {
+                    $queries++;
+                    $exists->execute([$row['tconst']]);
+                }
+                if ($exists === null || !$exists->fetchColumn()) {
+                    $unmatched++;
+                }
+            }
+            $processed++;
+            $batch++;
+            if ($batch === $portion) {
+                $conn->commit();
+                $committed += $batch;
+                $batch = 0;
+            }
+        }
+        if ($conn->isTransactionActive()) {
+            $conn->commit();
+            $committed += $batch;
+        }
+        return ['processed' => $processed, 'committed' => $committed, 'unmatched' => $unmatched, 'queries' => $queries, 'elapsed' => microtime(true) - $started];
+    } catch (Throwable $error) {
+        if ($conn->isTransactionActive()) {
+            $conn->rollBack();
+        }
+        $reason = $error instanceof \Doctrine\DBAL\DBALException ? 'database write failed.' : $error->getMessage();
+        throw new RuntimeException("$path:$last_line: import failed; processed=$processed committed=$committed rolled_back=$batch. $reason", 0, $error);
+    } finally {
+        $statement->closeCursor();
+        if ($exists !== null) {
+            $exists->closeCursor();
+        }
+    }
+}
+

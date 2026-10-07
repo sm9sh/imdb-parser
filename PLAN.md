@@ -62,11 +62,11 @@
 
 Файли: `run.php`, `lib/importer.php`, `tests/ImportTest.php`.
 
-- [ ] Замінити UPDATE-then-INSERT на параметризований upsert для basics. SQL має відповідати підтримуваній версії SQLite.
-- [ ] Оновлювати ratings лише для наявних `tconst`; рахувати unmatched entries.
-- [ ] Перевіряти файли й headers до запису. `TRANSACTION_PORTION` має бути додатним integer; headers не входять до лічильника даних.
-- [ ] Commit виконується після batch. При помилці rollback охоплює поточний batch. Раніше committed batches залишаються в базі; це явно вказується в результаті.
-- [ ] Закривати файли й з'єднання через гарантоване cleanup. Після збою дозволити повторний запуск із початку без duplicate-key errors; окремі checkpoints поки не потрібні.
+- [x] Замінити UPDATE-then-INSERT на параметризований upsert для basics. SQL має відповідати підтримуваній версії SQLite.
+- [x] Оновлювати ratings лише для наявних `tconst`; рахувати unmatched entries.
+- [x] Перевіряти файли й headers до запису. `TRANSACTION_PORTION` має бути додатним integer; headers не входять до лічильника даних.
+- [x] Commit виконується після batch. При помилці rollback охоплює поточний batch. Раніше committed batches залишаються в базі; це явно вказується в результаті.
+- [x] Закривати файли й з'єднання через гарантоване cleanup. Після збою дозволити повторний запуск із початку без duplicate-key errors; окремі checkpoints поки не потрібні.
 
 Готово, коли два імпорти однакових fixtures не створюють duplicates, змінені дані оновлюються, а збій усередині batch не залишає його частково записаним.
 
