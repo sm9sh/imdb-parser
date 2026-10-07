@@ -10,7 +10,7 @@
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 36 сценаріїв у 10 test files. Перший повний import пройшов; повторний і фінальне оформлення ще тривають. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 36 сценаріїв у 10 test files. Усі етапи завершено. Повний import і repeat пройшли; усі поля обох datasets незалежно звірено за tconst. Результати — у `docs/import-benchmark.md`. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
 
 ## Початковий огляд MySQL backend
 
@@ -103,7 +103,7 @@
 - [x] Повторно використовувати prepared statements. Якщо SQL round trips є головним обмеженням, додати bounded batch writes без завантаження dataset у RAM.
 - [x] Обмежувати batch за rows і bytes з урахуванням SQLite limit на кількість SQL parameters; перевірити неповний останній batch.
 - [x] Порівняти baseline та результат на одному середовищі. Використати фактичне порівняння без абсолютного rows/sec SLA; окремого числового target користувач не задав.
-- [ ] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, file sizes, counts, час і пам'ять.
+- [x] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, file sizes, counts, час і пам'ять.
 
 Готово, коли використання RAM залежить від розміру рядка та batch, а не від всього файла, і є звіт із реальним повним запуском.
 
@@ -121,11 +121,11 @@
 
 - [x] Чиста інсталяція відтворюється за README.
 - [x] Unit та integration tests проходять на задокументованих versions.
-- [ ] Повний import і повторний import завершуються успішно без duplicates та втрати значень.
+- [x] Повний import і повторний import завершуються успішно без duplicates та втрати значень.
 - [x] Bad input, database error і download failure дають коректний exit code; ресурси закриті, поточний batch відкочено.
 - [x] Help і filesystem-only operations не змінюють базу.
 - [x] Якщо schema наявної SQLite бази змінюється, є явна перевірена міграція.
-- [ ] Є вимірювання швидкості й peak memory на повному dataset.
+- [x] Є вимірювання швидкості й peak memory на повному dataset.
 
 ## Джерела і межі перевірки
 
@@ -151,3 +151,8 @@
 | Review | Reviewer перевірив source і tests; повний/repeat import та чисте встановлення перевіряє виконавець. |
 
 Відкладений Minor: якщо OS блокує unlink, `.part` може залишитися без повідомлення про residual path. Справний кінцевий файл зберігається; це обмеження описано в README.
+Фінальна перевірка: full import — 2776.961 s, repeat — 3548.345 s; обидва exit 0, 8701401 titles / 1215671 ratings, unmatched 0, PHP peak 4 MiB. Після обох запусків counts і NULL values збігаються, partial ratings 0, `quick_check` = `ok`. Після repeat незалежно звірено всі 9/3 поля кожного source row за `tconst`; усі значення збігаються. Позиційний comparator відхилено після підтвердження різного порядку IDs у TSV та SQLite; це не вимагало змін importer.
+
+Документація та Composer commands: `9616e3c`. Benchmark basics показав +49.9% rows/sec проти baseline на однаковому 100k dataset; full timings не є абсолютним SLA. Звіт містить versions, revisions, hashes, sizes, SQL counts, час, пам'ять та межі перевірки. Final suite: 36 сценаріїв у 10 test files; lint і Composer validation/platform checks пройшли.
+
+Working `db/imdb.sqlite` не заповнювався. Automatic approval review відхилив прямий full import через масштабні additions/overwrites; план повністю перевірено в окремій owned test database. Власну test workspace видалено після збереження звіту; working config, tools, vendor, exchange та db збережено. Push і PR не виконувалися.
