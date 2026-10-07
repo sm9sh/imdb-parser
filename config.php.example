@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'DATABASE_URL' => 'mysql://root:root@localhost/imdb',
+    'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', __DIR__) . '/db/imdb.sqlite',
     'TRANSACTION_PORTION' => 2000,
     'DOWNLOAD_DIR' => __DIR__ . '/exchange/',
 ];

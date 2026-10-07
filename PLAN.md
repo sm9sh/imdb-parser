@@ -4,15 +4,17 @@
 
 ## Мета та межі
 
-Погоджена мета: надійний CLI для імпорту й оновлення `title.basics` та `title.ratings` у MySQL.
+Погоджена мета: надійний CLI для імпорту й оновлення `title.basics` та `title.ratings` у SQLite.
 
 Готовий інструмент правильно переносить значення IMDb, підтримує повторний запуск, обробляє збої та працює з великими файлами без завантаження всього dataset у RAM. Поточні прапорці `-d`, `-u`, `-p`, `-t`, `-a` залишаються доступними. `-a` не очищає таблицю.
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Цей документ описує запропоновані зміни. Код і база даних під час планування не змінювалися.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite configuration, створення каталогу й схеми, NULL values та `-t` реалізовано; integration test `php tests/SqliteTest.php` перевіряє малий import і повторний запуск. Інші етапи залишаються відкритими. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.1, SQLite 3.36.0; project database створена, таблиця `title` порожня. Встановлений DBAL дає попередні PHP 8.1 deprecation notices; локальний untracked `composer.lock` потребує синхронізації після додавання `ext-pdo_sqlite`. Перевірка залежностей залишається в етапі 1.
 
-## Що вже перевірено
+## Початковий огляд MySQL backend
+
+Місця й висновки цієї таблиці відповідають версії `bab262b`. SQLite використовує окрему схему з integer years, nullable numeric fields і TEXT titles.
 
 | Місце | Тригер і наслідок | Заплановане рішення |
 | --- | --- | --- |
@@ -26,7 +28,7 @@
 | `run.php:67–83` | Download пише прямо в кінцевий файл. Збій може знищити попередню справну копію; таймаути не задані. | Тимчасовий файл, явні таймаути, перевірка результату та безпечна заміна. |
 | `composer.json`, tracked files | PHP minimum нижчий за вимогу встановленого DBAL; project tests і `.gitignore` відсутні. | Узгодити вимоги, додати ізольовані tests та правила для локальних файлів. |
 
-Проби не запускали importer і не підключалися до MySQL. Поведінку SQL ще потрібно підтвердити integration tests на окремій локальній базі.
+Початкові проби не запускали importer і не підключалися до MySQL. Після переходу SQLite перевірено окремим integration test; повний dataset ще не імпортувався.
 
 ## Порядок виконання
 
@@ -34,33 +36,33 @@
 
 Файли: `composer.json`, `.gitignore`, `tests/run.php`, `tests/*Test.php`, `tests/fixtures/`.
 
-- [ ] Узгодити PHP minimum з DBAL і явно вказати потрібні extensions, зокрема PDO MySQL.
-- [ ] Визначити підтримувані PHP та MySQL versions; зафіксувати їх у README. Перевірити версію і strict SQL mode на окремій test database.
+- [ ] Узгодити PHP minimum з DBAL і явно вказати потрібні extensions, зокрема PDO SQLite.
+- [ ] Визначити підтримувані PHP та SQLite versions; зафіксувати їх у README. Перевірити SQLite version на окремій test database.
 - [ ] Визначити політику `composer.lock` для цього CLI. Перевірити локальний lockfile перед включенням; не додавати його автоматично.
 - [ ] Ігнорувати `config.php`, `vendor/`, `exchange/`, `.idea/`, локальний `composer.phar` і тимчасові файли.
 - [ ] Додати простий PHP test runner із явними перевірками, які не залежать від налаштування `assert`. Зайві runtime dependencies не додавати.
 - [ ] Створити власні малі fixtures: Unicode, quotes, `\N`, рік `1894`, довгий title, повторний `tconst`, відсутній rating і пошкоджений рядок.
-- [ ] DB tests мають окремі test credentials і явний opt-in. Без них runner не використовує робочий `config.php`.
+- [ ] SQLite tests використовують власні тимчасові файли. Runner не використовує робочий `config.php`; можливі MySQL tests потребують окремих test credentials та opt-in.
 
 Готово, коли unit tests запускаються без мережі та MySQL, а integration tests фізично відокремлені від робочих даних.
 
 ### 2. Виправити TSV parser і схему
 
-Файли: `run.php`, мінімальний helper `lib/importer.php`, `tests/ParserTest.php`, `tests/ImportTest.php`, `migrations/001_title_schema.sql`.
+Файли: `run.php`, мінімальний helper `lib/importer.php`, `tests/ParserTest.php`, `tests/ImportTest.php`.
 
 - [ ] Читати повний рядок, зберігати literal quotes, Unicode та порожні кінцеві поля. Перевіряти потрібні headers, дублікати headers і кількість колонок.
 - [ ] Нормалізувати `\N` в `NULL`. Перевіряти числові значення до SQL. Некоректний запис зупиняє імпорт із назвою файлу та номером рядка.
 - [ ] Зберігати роки як nullable integer; nullable numeric fields і ratings не підміняти нулями. Для titles прибрати обмеження 255 characters без обрізання даних.
 - [ ] Зберегти таблицю `title`, ключ `tconst`, назви колонок і потрібні індекси. Не вводити нову модель каталогу.
-- [ ] Надати окрему явну міграцію для наявної таблиці. `CREATE TABLE IF NOT EXISTS` не замінює міграцію. Описати backup і повторний імпорт для даних, які стара схема вже могла спотворити.
+- [ ] Перед зміною наявної SQLite schema перевірити сумісність. Якщо потрібна зміна колонок, надати окрему явну міграцію й описати backup. `CREATE TABLE IF NOT EXISTS` не замінює міграцію.
 
-Готово, коли fixtures імпортуються в strict mode, `1894` зберігається точно, missing values є `NULL`, довгі назви не обрізаються, а міграція зберігає наявні записи.
+Готово, коли fixtures імпортуються у SQLite, `1894` зберігається точно, missing values є `NULL`, довгі назви не обрізаються, а зміни схеми зберігають наявні записи.
 
 ### 3. Зробити повторний імпорт безпечним
 
 Файли: `run.php`, `lib/importer.php`, `tests/ImportTest.php`.
 
-- [ ] Замінити UPDATE-then-INSERT на параметризований upsert для basics. SQL має відповідати погодженій версії MySQL.
+- [ ] Замінити UPDATE-then-INSERT на параметризований upsert для basics. SQL має відповідати підтримуваній версії SQLite.
 - [ ] Оновлювати ratings лише для наявних `tconst`; рахувати unmatched entries.
 - [ ] Перевіряти файли й headers до запису. `TRANSACTION_PORTION` має бути додатним integer; headers не входять до лічильника даних.
 - [ ] Commit виконується після batch. При помилці rollback охоплює поточний batch. Раніше committed batches залишаються в базі; це явно вказується в результаті.
@@ -74,7 +76,7 @@
 
 - [ ] Help і запуск без arguments завершуються до читання credentials, створення файлів та звернення до MySQL.
 - [ ] Невідомий argument дає зрозумілу помилку й ненульовий exit code.
-- [ ] `-d` та `-u` працюють без MySQL. `-p` перевіряє потрібні файли. `-t` очищає таблицю лише при явному передаванні цього прапорця.
+- [ ] `-d` та `-u` не відкривають SQLite і не змінюють schema. `-p` перевіряє потрібні файли. `-t` очищає таблицю лише при явному передаванні цього прапорця.
 - [ ] Нормалізувати `DOWNLOAD_DIR`, включно зі шляхами без кінцевого slash і Windows paths із пробілами.
 - [ ] Повертати exit code 0 при успіху; при помилці писати її в stderr і повертати ненульовий code. Паролі не потрапляють у повідомлення.
 - [ ] Додати один локальний process lock для операцій у спільному робочому каталозі; другий процес завершується до змін. Це не є distributed lock між різними хостами.
@@ -97,11 +99,11 @@
 
 Файли: `lib/importer.php`, `tests/ImportTest.php`, `docs/import-benchmark.md`.
 
-- [ ] Виміряти rows/sec, SQL query count, elapsed time і peak memory на однаковому наборі даних та окремій локальній MySQL database.
+- [ ] Виміряти rows/sec, SQL query count, elapsed time і peak memory на однаковому наборі даних та окремій локальній SQLite database.
 - [ ] Повторно використовувати prepared statements. Якщо SQL round trips є головним обмеженням, додати bounded batch writes без завантаження dataset у RAM.
-- [ ] Обмежувати batch за rows і bytes з урахуванням `max_allowed_packet`; перевірити неповний останній batch.
+- [ ] Обмежувати batch за rows і bytes з урахуванням SQLite limit на кількість SQL parameters; перевірити неповний останній batch.
 - [ ] Порівняти baseline та результат на одному середовищі. Числовий throughput target погодити за вимірюванням, а не вигадувати до benchmark.
-- [ ] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, SQL mode, file sizes, counts, час і пам'ять.
+- [ ] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, file sizes, counts, час і пам'ять.
 
 Готово, коли використання RAM залежить від розміру рядка та batch, а не від всього файла, і є звіт із реальним повним запуском.
 
@@ -122,11 +124,11 @@
 - [ ] Повний import і повторний import завершуються успішно без duplicates та втрати значень.
 - [ ] Bad input, database error і download failure дають коректний exit code; ресурси закриті, поточний batch відкочено.
 - [ ] Help і filesystem-only operations не змінюють базу.
-- [ ] Наявна таблиця оновлюється явною перевіреною міграцією.
+- [ ] Якщо schema наявної SQLite бази змінюється, є явна перевірена міграція.
 - [ ] Є вимірювання швидкості й peak memory на повному dataset.
 
 ## Джерела і межі перевірки
 
 - [IMDb dataset specification](https://data.imdb.com/non-commercial-datasets/): TSV headers, UTF-8, missing-value marker `\N`, поля basics і ratings. Ці datasets мають умови personal/non-commercial use; посилання потрібно зберегти в README.
 - [MySQL YEAR documentation](https://dev.mysql.com/doc/refman/8.4/en/year.html): допустимі роки `1901–2155` та `0000`; поведінка при invalid values залежить від strict SQL mode.
-- Локально перевірено source, tracked files, вимогу PHP у встановленому DBAL, headers і по одному рядку gzip datasets. Повний import, MySQL server version та SQL mode під час планування не перевірялися.
+- Локально перевірено source, tracked files, вимогу PHP у встановленому DBAL, headers і по одному рядку gzip datasets. Повний import під час планування не перевірявся. SQLite integration test додано після зміни backend; MySQL SQL mode не є вимогою основного SQLite import.

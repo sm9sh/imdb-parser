@@ -1,7 +1,7 @@
 # imdb-parser
-**Simple parser for free IMDB datasets (https://datasets.imdbws.com/) to mysql database**
+**Simple parser for free IMDB datasets (https://datasets.imdbws.com/) to SQLite or MySQL database**
 
-Before installing you must create mysql database.
+SQLite is the default backend. Enable PDO SQLite; `db/imdb.sqlite` and its directory are created automatically. Database files are excluded from Git.
 
 **Install via composer:**
 
@@ -22,7 +22,8 @@ Before installing you must create mysql database.
     `composer update`
 
 **Next steps:**
-- Setup your database and working dir in `config.php`
+- Copy `config.php.example` to `config.php` if needed. The default `DATABASE_URL` points to `db/imdb.sqlite`; configure your working directory with `DOWNLOAD_DIR`.
+- To use MySQL instead, configure a MySQL `DATABASE_URL`, enable PDO MySQL, and create the database before running.
 
 - Run to parse
 
@@ -35,3 +36,7 @@ Before installing you must create mysql database.
     -p : Parse
     -t : Truncate table
     -a : All proceeds
+
+**SQLite integration test:**
+
+Run `php tests/SqliteTest.php`. It imports small fixtures into its own temporary SQLite database, checks repeated import and table clearing, then removes its temporary files.
