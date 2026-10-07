@@ -99,9 +99,9 @@
 
 Файли: `lib/importer.php`, `tests/ImportTest.php`, `docs/import-benchmark.md`.
 
-- [ ] Виміряти rows/sec, SQL query count, elapsed time і peak memory на однаковому наборі даних та окремій локальній SQLite database.
-- [ ] Повторно використовувати prepared statements. Якщо SQL round trips є головним обмеженням, додати bounded batch writes без завантаження dataset у RAM.
-- [ ] Обмежувати batch за rows і bytes з урахуванням SQLite limit на кількість SQL parameters; перевірити неповний останній batch.
+- [x] Виміряти rows/sec, SQL query count, elapsed time і peak memory на однаковому наборі даних та окремій локальній SQLite database.
+- [x] Повторно використовувати prepared statements. Якщо SQL round trips є головним обмеженням, додати bounded batch writes без завантаження dataset у RAM.
+- [x] Обмежувати batch за rows і bytes з урахуванням SQLite limit на кількість SQL parameters; перевірити неповний останній batch.
 - [ ] Порівняти baseline та результат на одному середовищі. Числовий throughput target погодити за вимірюванням, а не вигадувати до benchmark.
 - [ ] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, file sizes, counts, час і пам'ять.
 
