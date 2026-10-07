@@ -5,8 +5,8 @@
     "description": "Simple parser for free IMDB datasets to SQLite or MySQL database",
     "license": "MIT",
     "require": {
-        "php": ">=7.0",
-        "doctrine/dbal": "^2.13",
+        "php": "^8.2",
+        "doctrine/dbal": "^2.13.9",
         "ext-curl": "*",
         "ext-pdo_sqlite": "*",
         "ext-zlib": "*"

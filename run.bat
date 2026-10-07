@@ -1,1 +1,6 @@
-php run.php %1 %2 %3 %4 %5 %6 %7 %8 %9
+@echo off
+setlocal
+set "IMDB_PHP=%~dp0.tools\php-8.2\php.exe"
+if not exist "%IMDB_PHP%" set "IMDB_PHP=php"
+"%IMDB_PHP%" "%~dp0run.php" %*
+exit /b %errorlevel%

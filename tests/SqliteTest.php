@@ -7,13 +7,14 @@ function expectSqlite($condition, $message) {
 }
 
 function runSqliteCli($directory, $argument) {
-    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($directory . '/run.php') . ' ' . escapeshellarg($argument);
+    $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=' . E_ALL . ' -d display_errors=1 -d log_errors=0 ' . escapeshellarg($directory . '/run.php') . ' ' . escapeshellarg($argument);
     $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory);
     expectSqlite(is_resource($process), 'Could not start the importer.');
     $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
     fclose($pipes[1]);
     fclose($pipes[2]);
     expectSqlite(proc_close($process) === 0, 'SQLite CLI import failed: ' . $output);
+    expectSqlite(strpos($output, 'Deprecated:') === false, 'Importer emits PHP deprecation notices: ' . $output);
 }
 
 function removeSqliteTestDirectory($directory) {

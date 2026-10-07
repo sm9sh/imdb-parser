@@ -1,6 +1,18 @@
 # imdb-parser
 **Simple parser for free IMDB datasets (https://datasets.imdbws.com/) to SQLite or MySQL database**
 
+Requires PHP 8.2 (Composer constraint `^8.2`), cURL, zlib, and PDO SQLite.
+
+**Local Windows runtime:**
+
+This checkout has PHP 8.2.34 in `.tools/php-8.2/`. `run.bat` selects that runtime and falls back to PHP on PATH when it is absent. Runtime binaries and local Composer are ignored by Git. For a fresh checkout, install [PHP 8.2 for Windows](https://www.php.net/downloads.php?os=windows&version=8.2) or provide PHP 8.2 on PATH.
+
+- Run the importer: `.\run.bat -a`.
+- Run tests: `.\.tools\php-8.2\php.exe tests\SqliteTest.php`.
+- Install dependencies: `.\.tools\php-8.2\php.exe .tools\composer.phar install`.
+
+Use PHP 8.2 on PATH for the generic `php` and `composer` commands below. In PhpStorm, the project language level is 8.2; the local CLI interpreter path is `.tools/php-8.2/php.exe`.
+
 SQLite is the default backend. Enable PDO SQLite; `db/imdb.sqlite` and its directory are created automatically. Database files are excluded from Git.
 
 **Install via composer:**

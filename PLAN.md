@@ -10,7 +10,7 @@
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite configuration, створення каталогу й схеми, NULL values та `-t` реалізовано; integration test `php tests/SqliteTest.php` перевіряє малий import і повторний запуск. Інші етапи залишаються відкритими. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.1, SQLite 3.36.0; project database створена, таблиця `title` порожня. Встановлений DBAL дає попередні PHP 8.1 deprecation notices; локальний untracked `composer.lock` потребує синхронізації після додавання `ext-pdo_sqlite`. Перевірка залежностей залишається в етапі 1.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite configuration, створення каталогу й схеми, NULL values та `-t` реалізовано; integration test `php tests/SqliteTest.php` перевіряє малий import і повторний запуск. Інші етапи залишаються відкритими. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
 
 ## Початковий огляд MySQL backend
 
@@ -36,7 +36,7 @@
 
 Файли: `composer.json`, `.gitignore`, `tests/run.php`, `tests/*Test.php`, `tests/fixtures/`.
 
-- [ ] Узгодити PHP minimum з DBAL і явно вказати потрібні extensions, зокрема PDO SQLite.
+- [x] Узгодити PHP minimum з DBAL і явно вказати потрібні extensions, зокрема PDO SQLite. Вимоги PHP `^8.2`, DBAL `^2.13.9`; platform check пройшов.
 - [ ] Визначити підтримувані PHP та SQLite versions; зафіксувати їх у README. Перевірити SQLite version на окремій test database.
 - [ ] Визначити політику `composer.lock` для цього CLI. Перевірити локальний lockfile перед включенням; не додавати його автоматично.
 - [ ] Ігнорувати `config.php`, `vendor/`, `exchange/`, `.idea/`, локальний `composer.phar` і тимчасові файли.

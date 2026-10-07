@@ -2,11 +2,11 @@
 
 ## Project Structure & Module Organization
 
-This PHP CLI tool imports IMDb datasets into SQLite by default; MySQL remains available. `run.php` contains argument handling, downloads, gzip extraction, table creation, and imports. `run.bat` forwards arguments on Windows. `composer.json` declares dependencies; `vendor/` contains installed packages. Copy `config.php.example` to `config.php` for local settings. `exchange/` holds downloads; `db/imdb.sqlite` stores the default database. There are no web assets.
+This PHP CLI tool imports IMDb datasets into SQLite by default; MySQL remains available. `run.php` contains argument handling, downloads, gzip extraction, table creation, and imports. `run.bat` selects the runtime and forwards arguments on Windows. `composer.json` declares dependencies; `vendor/` contains installed packages. Copy `config.php.example` to `config.php` for local settings. `exchange/` holds downloads; `db/imdb.sqlite` stores the default database.
 
 ## Build, Test, and Development Commands
 
-Run commands from the repository root. Use PHP 7.1+ with cURL, zlib, and PDO SQLite. `composer.json` declares PHP 7.0, but installed DBAL requires 7.1+. Preserve compatible syntax.
+Use PHP 8.2 with cURL, zlib, and PDO SQLite. `.tools/php-8.2/php.exe` is the local runtime; `run.bat` selects it. For `php` and `composer` commands, use PHP 8.2 on PATH. Run from the repository root.
 
 - `composer install`: install declared dependencies. The repository does not track a lockfile.
 - `composer update`: refresh dependencies intentionally.
