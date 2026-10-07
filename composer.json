@@ -18,6 +18,7 @@
         }
     ],
     "scripts": {
-        "post-create-project-cmd": ["php run.php"]
+        "post-create-project-cmd": ["@php run.php --help"],
+        "test": "@php tests/run.php"
     }
 }

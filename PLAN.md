@@ -1,6 +1,6 @@
 # План завершення imdb-parser
 
-Дата: 2026-10-07. Перевірена версія коду: `bab262b`.
+Дата: 2026-10-07. Початковий огляд: `bab262b`; реалізація: branch `codex/complete-cli`.
 
 ## Мета та межі
 
@@ -10,7 +10,7 @@
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite configuration, створення каталогу й схеми, NULL values та `-t` реалізовано; integration test `php tests/SqliteTest.php` перевіряє малий import і повторний запуск. Інші етапи залишаються відкритими. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 36 сценаріїв у 10 test files. Перший повний import пройшов; повторний і фінальне оформлення ще тривають. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
 
 ## Початковий огляд MySQL backend
 
@@ -28,7 +28,7 @@
 | `run.php:67–83` | Download пише прямо в кінцевий файл. Збій може знищити попередню справну копію; таймаути не задані. | Тимчасовий файл, явні таймаути, перевірка результату та безпечна заміна. |
 | `composer.json`, tracked files | PHP minimum нижчий за вимогу встановленого DBAL; project tests і `.gitignore` відсутні. | Узгодити вимоги, додати ізольовані tests та правила для локальних файлів. |
 
-Початкові проби не запускали importer і не підключалися до MySQL. Після переходу SQLite перевірено окремим integration test; повний dataset ще не імпортувався.
+Початкові проби не запускали importer і не підключалися до MySQL. Після переходу на SQLite додано ізольовані tests. Результати повного dataset наведено у `docs/import-benchmark.md`.
 
 ## Порядок виконання
 
@@ -102,7 +102,7 @@
 - [x] Виміряти rows/sec, SQL query count, elapsed time і peak memory на однаковому наборі даних та окремій локальній SQLite database.
 - [x] Повторно використовувати prepared statements. Якщо SQL round trips є головним обмеженням, додати bounded batch writes без завантаження dataset у RAM.
 - [x] Обмежувати batch за rows і bytes з урахуванням SQLite limit на кількість SQL parameters; перевірити неповний останній batch.
-- [ ] Порівняти baseline та результат на одному середовищі. Числовий throughput target погодити за вимірюванням, а не вигадувати до benchmark.
+- [x] Порівняти baseline та результат на одному середовищі. Використати фактичне порівняння без абсолютного rows/sec SLA; окремого числового target користувач не задав.
 - [ ] Виконати повний import локальних datasets і повторний запуск. Зафіксувати versions, file sizes, counts, час і пам'ять.
 
 Готово, коли використання RAM залежить від розміру рядка та batch, а не від всього файла, і є звіт із реальним повним запуском.
@@ -111,20 +111,20 @@
 
 Файли: `README.md`, `AGENTS.md`, `config.php.example`, цей план.
 
-- [ ] Описати встановлення, requirements, прапорці, test commands, schema migration та правила повторного запуску після збою.
-- [ ] Описати відмінність між batch rollback і rollback усього import, а також поведінку unmatched ratings.
-- [ ] Додати підсумок CLI: processed rows, unmatched ratings, elapsed time, peak memory та фінальний статус. Лічильники мають відображати фактичні результати.
-- [ ] Перевірити всі документовані commands на чистій локальній копії.
-- [ ] Для кожного завершеного етапу виконати відповідні checks і зробити окремий локальний commit лише потрібних файлів. Push і pull request потребують окремого погодження.
+- [x] Описати встановлення, requirements, прапорці, test commands, schema migration та правила повторного запуску після збою.
+- [x] Описати відмінність між batch rollback і rollback усього import, а також поведінку unmatched ratings.
+- [x] Додати підсумок CLI: processed rows, unmatched ratings, elapsed time, peak memory та фінальний статус. Лічильники мають відображати фактичні результати.
+- [x] Перевірити всі документовані commands на чистій локальній копії.
+- [x] Для кожного завершеного етапу виконати відповідні checks і зробити окремий локальний commit лише потрібних файлів. Push і pull request потребують окремого погодження.
 
 ## Критерії готовності проєкту
 
-- [ ] Чиста інсталяція відтворюється за README.
-- [ ] Unit та integration tests проходять на задокументованих versions.
+- [x] Чиста інсталяція відтворюється за README.
+- [x] Unit та integration tests проходять на задокументованих versions.
 - [ ] Повний import і повторний import завершуються успішно без duplicates та втрати значень.
-- [ ] Bad input, database error і download failure дають коректний exit code; ресурси закриті, поточний batch відкочено.
-- [ ] Help і filesystem-only operations не змінюють базу.
-- [ ] Якщо schema наявної SQLite бази змінюється, є явна перевірена міграція.
+- [x] Bad input, database error і download failure дають коректний exit code; ресурси закриті, поточний batch відкочено.
+- [x] Help і filesystem-only operations не змінюють базу.
+- [x] Якщо schema наявної SQLite бази змінюється, є явна перевірена міграція.
 - [ ] Є вимірювання швидкості й peak memory на повному dataset.
 
 ## Джерела і межі перевірки
@@ -134,3 +134,20 @@
 - Локально перевірено source, tracked files, вимогу PHP у встановленому DBAL, headers і по одному рядку gzip datasets. Повний import під час планування не перевірявся. SQLite integration test додано після зміни backend; MySQL SQL mode не є вимогою основного SQLite import.
 
 Етап 2: SQLite schema не змінюється. PRAGMA перевіряє types, nullability і primary key перед DDL; несумісна схема потребує окремої міграції. Parser tests: 6 сценаріїв RED → GREEN.
+## Виконання та межі
+
+Завершені етапи мають локальні commits: harness `c671397`, parser `6e5712e`, idempotence/rollback `c7a4e80`, CLI `5ffd842`, file operations `c250f48`, bounded writes `ff8014c`. Після незалежного review додано явні NULL ratings для старих DEFAULT 0 schemas та відмову від composite primary key до clearing (`aa5bfd6`). Windows test runner зберігає повний redirected output (`8167cc0`).
+
+Перевірено чисте Composer install без локального config/vendor/lock, усі test files, launcher/help, lint, Composer validation/platform requirements та обидва benchmark commands. CLI flags перевірено в ізольованих subprocess tests. Working database не використовується для tests.
+
+| Межа | Рішення та наслідок |
+| --- | --- |
+| MySQL | Залишається legacy; потребує окремої schema та integration validation. |
+| Process lock | Захищає один checkout; інші writers потребують зовнішньої координації. |
+| SQLite durability | Збережено defaults; звичайні failure/retry перевірено. Hardware power loss та особливості інших filesystems потребують окремих перевірок. |
+| Gzip | Підтримано один member; concatenated streams відхиляються. |
+| Runtime | Результати підтверджено для PHP 8.2.34 x64 / SQLite 3.53.4; інші runtimes окремо не перевірено. |
+| Dataset | Повні перевірки використовують наявні local snapshots; їхню актуальність не заявлено. |
+| Review | Reviewer перевірив source і tests; повний/repeat import та чисте встановлення перевіряє виконавець. |
+
+Відкладений Minor: якщо OS блокує unlink, `.part` може залишитися без повідомлення про residual path. Справний кінцевий файл зберігається; це обмеження описано в README.

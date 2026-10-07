@@ -2,34 +2,34 @@
 
 ## Project Structure & Module Organization
 
-This PHP CLI tool imports IMDb datasets into SQLite by default; MySQL remains available. `run.php` contains argument handling, downloads, gzip extraction, table creation, and imports. `run.bat` selects the runtime and forwards arguments on Windows. `composer.json` declares dependencies; `vendor/` contains installed packages. Copy `config.php.example` to `config.php` for local settings. `exchange/` holds downloads; `db/imdb.sqlite` stores the default database.
+This PHP CLI imports IMDb basics and ratings into SQLite. `run.php` owns arguments, config, process locking and workflow. `lib/importer.php` owns TSV parsing, schema checks and database writes; `lib/files.php` owns downloads and gzip extraction. `run.bat` selects PHP on Windows. `tests/*Test.php`, `tests/bootstrap.php` and `tests/fixtures/` provide isolated checks. `db/imdb.sqlite` holds the working database; `exchange/` holds datasets. Copy `config.php.example` to local `config.php`.
 
 ## Build, Test, and Development Commands
 
-Use PHP 8.2 with cURL, zlib, and PDO SQLite. `.tools/php-8.2/php.exe` is the local runtime; `run.bat` selects it. For `php` and `composer` commands, use PHP 8.2 on PATH. Run from the repository root.
+Use PHP 8.2+ with cURL, zlib and PDO SQLite; SQLite must be 3.24.0+. Tested versions are in README. The local runtime is `.tools/php-8.2/php.exe`; `run.bat` selects it. Generic commands require PHP 8.2 on PATH.
 
-- `composer install`: install declared dependencies. The repository does not track a lockfile.
-- `composer update`: refresh dependencies intentionally.
-- `php -l run.php`: check parser syntax without executing imports.
-- `php -l config.php.example`: check the configuration template.
-- `php run.php -a`: download, extract, and import both configured datasets.
-- `php run.php -d`, `-u`, or `-p`: run download, extraction, or import separately.
-- `.\run.bat -a`: run the full workflow on Windows.
+- `composer install`: resolve and install dependencies. Keep the local lockfile untracked under the current policy.
+- `php tests/run.php`: run all isolated test files, including a local HTTP server.
+- `php tests/SqliteTest.php`: run the original SQLite smoke test.
+- `php tests/benchmark.php optimized 100000`: measure an owned disposable database.
+- `php -l run.php`: check syntax; also lint changed helpers and tests.
+- `php run.php --help`: inspect flags without side effects.
+- `.\run.bat -a`: download, extract and import; preserve existing records.
 
-SQLite creates its file and directory automatically. Configure `DATABASE_URL` for another database. There is no separate build step.
+There is no build step. See README for separate `-d`, `-u`, `-p` and destructive `-t` actions.
 
 ## Coding Style & Naming Conventions
 
-Use four spaces for indentation and match nearby brace placement. Existing helper functions use camelCase, such as `downloadFile`; local variables use snake_case, such as `$out_dir`; classes use PascalCase. Configuration keys use uppercase snake_case. Keep SQL column names aligned with IMDb TSV headers. Preserve streaming reads and transaction batching for large datasets. No formatter or linter is configured.
+Use four spaces, camelCase helpers and snake_case variables. Match nearby brace placement. Configuration keys use uppercase snake_case. Keep SQL names aligned with IMDb headers. Preserve streaming reads, bounded rows/bytes and parameterized SQL. Avoid dependencies for simple helpers. No formatter is configured.
 
 ## Testing Guidelines
 
-Run `php tests/SqliteTest.php` for the SQLite integration test. It uses the real CLI, isolated fixtures, and a temporary database; checks import, repeated import, NULL values, Unicode, historical years, and clearing; then cleans up. Lint changed PHP files. No coverage threshold exists. Name additional tests `tests/*Test.php` and document their commands.
+Use explicit checks that work with PHP assertions disabled. Name tests `tests/*Test.php`. Exercise real CLI behavior, fixtures and disposable databases; never load working credentials. HTTP tests must use the local fixture server. Cover failures, cleanup and partial batches. No coverage threshold exists. Do not run tests against working data.
 
 ## Commit & Pull Request Guidelines
 
-History uses short messages such as `+ run.bat` and `* fix`. Prefer clear, concise English messages, such as `docs: add repository guidelines`. Stage specific paths. Describe changes, validation, configuration impact, and related issues in pull requests. Obtain approval before pushing or opening a pull request.
+Use concise English messages, such as `fix: preserve TSV on extraction failure`. Stage named paths only. Commit verified changes. PR descriptions explain behavior, validation and configuration impact; link relevant issues. Obtain approval before pushing or creating a PR.
 
 ## Security & Configuration Tips
 
-Keep local credentials, SQLite files, downloaded datasets, `vendor/`, and IDE files out of commits. Every configured invocation can create the `title` table. `-t` clears it; use a disposable database for tests. Keep database values parameterized through Doctrine DBAL.
+Keep config, tools, vendor, datasets, database and IDE files out of Git. Schema changes require an explicit migration and backup. A project process lock protects one checkout only. Report committed batches accurately after failure; do not claim whole-import rollback. MySQL remains an unvalidated legacy backend.
