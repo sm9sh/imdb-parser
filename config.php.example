@@ -1,7 +1,11 @@
 <?php
 
 return [
-    'DATABASE_URL' => 'mysql://root:root@localhost/imdb',
+    'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', __DIR__) . '/db/imdb.sqlite',
     'TRANSACTION_PORTION' => 2000,
+    'CONNECT_TIMEOUT' => 10,
+    'TRANSFER_TIMEOUT' => 3600,
+    'DOWNLOAD_RETRIES' => 2,
+    'DATASET_BASE_URL' => 'https://datasets.imdbws.com',
     'DOWNLOAD_DIR' => __DIR__ . '/exchange/',
 ];

@@ -1,232 +1,144 @@
 <?php
 
-require_once __DIR__ . '/vendor/autoload.php';
-
-$cfg_fname = __DIR__ . '/config.php';
-if (file_exists($cfg_fname)) {
-    $config = require($cfg_fname);
-}
-else {
-    copy($cfg_fname . '.example', $cfg_fname);
-    echo "!!!Setup your config.php!!!\n"; exit;
+function printHelp() {
+    echo "Usage: php run.php [-d] [-u] [-p] [-t] [-a]\n";
+    echo "-d : Download\n-u : Unzip\n-p : Import\n-t : Clear title table (explicit only)\n-a : Download, unzip and import; preserves existing titles\n-h, --help : Show help\n";
 }
 
-if (empty($config['DATABASE_URL'])) {
-    throw new Error('DATABASE_URL param is not defined in config.php');
-}
-
-$urls = [
-    'https://datasets.imdbws.com/title.basics.tsv.gz',  // movie titles
-    'https://datasets.imdbws.com/title.ratings.tsv.gz', // movie ratings
-//    'https://datasets.imdbws.com/name.basics.tsv.gz',   // names of actors
-];
-
-$conn = \Doctrine\DBAL\DriverManager::getConnection(['url' => $config['DATABASE_URL']]);
-$portion = $config['TRANSACTION_PORTION'] ?? 2000;
-$out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . "/exchange/";
-
-class Args {
-    public $is_download = false;
-    public $is_unzip = false;
-    public $is_truncate_table = false;
-    public $is_parse = false;
-
-    function __construct() {
-        global $argv, $argc;
-
-        if ($argc === 1) {
-            echo "-d : Download\n-u : Unzip\n-p : Parse\n-t : Truncate table\n-a : All proceeds\n\n";
-            return;
+function cliMain($arguments) {
+    if (!$arguments || $arguments === ['-h'] || $arguments === ['--help']) {
+        printHelp();
+        return;
+    }
+    $actions = ['-d' => false, '-u' => false, '-p' => false, '-t' => false];
+    foreach ($arguments as $argument) {
+        if ($argument === '-a') {
+            $actions['-d'] = $actions['-u'] = $actions['-p'] = true;
+        } elseif (array_key_exists($argument, $actions)) {
+            $actions[$argument] = true;
+        } else {
+            throw new RuntimeException('Unknown argument. Use --help.');
         }
-
-        foreach ($argv as $arg) {
-            switch ($arg)
-            {
-                case '-d':
-                    $this->is_download = true;
-                    break;
-                case '-u':
-                    $this->is_unzip = true;
-                    break;
-                case '-p':
-                    $this->is_parse = true;
-                    break;
-                case '-t':
-                    $this->is_truncate_table = true;
-                    break;
-                case '-a':
-                    $this->is_download = true;
-                    $this->is_unzip = true;
-                    $this->is_parse = true;
-                    break;
+    }
+    if (!is_file(__DIR__ . '/config.php')) {
+        throw new RuntimeException('Missing config.php. Copy config.php.example and review the settings.');
+    }
+    try {
+        $config = require __DIR__ . '/config.php';
+    } catch (Throwable $error) {
+        throw new RuntimeException('Could not load config.php. Check PHP syntax and settings.');
+    }
+    if (!is_array($config)) {
+        throw new RuntimeException('config.php must return an array.');
+    }
+    require_once __DIR__ . '/vendor/autoload.php';
+    require_once __DIR__ . '/lib/importer.php';
+    require_once __DIR__ . '/lib/files.php';
+    $portion = $config['TRANSACTION_PORTION'] ?? 2000;
+    if ($actions['-p'] && (!is_int($portion) || $portion < 1)) {
+        throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
+    }
+    $out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . '/exchange';
+    if (!is_string($out_dir) || $out_dir === '') {
+        throw new RuntimeException('DOWNLOAD_DIR must be a nonempty path.');
+    }
+    // Resolve relative download paths from the project, not the caller's directory.
+    if (!preg_match('~^(?:[A-Za-z]:[\\\\/]|[\\\\/])~', $out_dir)) {
+        $out_dir = __DIR__ . '/' . $out_dir;
+    }
+    $out_dir = rtrim($out_dir, '/\\') . DIRECTORY_SEPARATOR;
+    $lock = @fopen(__DIR__ . '/.imdb-parser.lock', 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Cannot open project process lock.');
+    }
+    $conn = null;
+    try {
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            throw new RuntimeException('Another importer is running in this project.');
+        }
+        $base_url = $config['DATASET_BASE_URL'] ?? 'https://datasets.imdbws.com';
+        if (!is_string($base_url) || !in_array(parse_url($base_url, PHP_URL_SCHEME), ['http', 'https'], true)) {
+            throw new RuntimeException('DATASET_BASE_URL must use HTTP(S).');
+        }
+        $base_url = rtrim($base_url, '/');
+        $datasets = [
+            'title.basics.tsv' => $base_url . '/title.basics.tsv.gz',
+            'title.ratings.tsv' => $base_url . '/title.ratings.tsv.gz',
+        ];
+        if (($actions['-d'] || $actions['-u']) && !is_dir($out_dir) && !@mkdir($out_dir, 0777, true) && !is_dir($out_dir)) {
+            throw new RuntimeException('Cannot create DOWNLOAD_DIR.');
+        }
+        foreach ($datasets as $name => $url) {
+            if ($actions['-d']) {
+                echo "Downloading $name.gz\n";
+                downloadFile($url, $out_dir . $name . '.gz', $config);
+            }
+            if ($actions['-u']) {
+                echo "Extracting $name.gz\n";
+                ungzip($out_dir . $name . '.gz', $out_dir . $name, true);
             }
         }
-    }
-}
-
-function downloadFile($url, $dest) {
-    $options = [
-        CURLOPT_FILE => is_resource($dest) ? $dest : fopen($dest, 'w'),
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_URL => $url,
-        CURLOPT_FAILONERROR => true, // HTTP code > 400 will throw curl error
-    ];
-
-    $ch = curl_init();
-    curl_setopt_array($ch, $options);
-    $return = curl_exec($ch);
-
-    if ($return === false) {
-        throw new Error(curl_error($ch));
-    }
-
-    return true;
-}
-
-function ungzip($gz_filename, $output_filename = null, $allow_overwrite = false, $read_chunk_length = 10240) {
-    //error check zipped file
-    if (!$gz_filename) {
-        throw new Error('Can’t unzip without a filename.');
-    }
-    if (strtolower(substr($gz_filename,-3)) !== '.gz') {
-        throw new Error('The provided filename does not have the expected .gz extension.');
-    }
-    if (!file_exists($gz_filename)) {
-        throw new Error('The zipped file does not exist.');
-    }
-
-    //error check output file
-    if (!$output_filename) {
-        $output_filename = substr($gz_filename, 0, -3);
-    } //just drop the .gz from incoming file by default
-    if ((!$allow_overwrite) && file_exists($output_filename)) {
-        throw new Error('A file already exists at the output file location.');
-    }
-    if (file_exists($output_filename) && (!is_writable($output_filename))) {
-        throw new Error('The output file location is not writeable.');
-    }
-
-    //open the files
-    $gz = gzopen($gz_filename, 'rb');
-    if (!$gz) {
-        throw new Error('The zipped file cannot be opened for reading.');
-    }
-    $out = fopen($output_filename, 'wb');
-    if (!$out) {
-        throw new Error('The output file cannot be opened for writing.');
-    }
-
-    //keep unzipping $read_chunk_length bytes at a time until we hit the end of the file
-    while (!gzeof($gz)) {
-        $unzipped = gzread($gz, $read_chunk_length);
-        if (fwrite($out, $unzipped) === false) {
-            throw new Error('There was an error writing to the output file.');
+        if ($actions['-p']) {
+            foreach ($datasets as $name => $url) {
+                validateTsvHeader($out_dir . $name, $name);
+            }
         }
-    }
-
-    //close the files
-    gzclose($gz);
-    fclose($out);
-
-    //return the output filename
-    return $output_filename;
-}
-
-if (!is_dir($out_dir) && !mkdir($out_dir, 0777, true)) {
-    throw new Error("Can't access to the '$out_dir' dir");
-}
-
-$a = new Args;
-
-$fnames = [];
-foreach ($urls as $url) {
-    $zname = trim(parse_url($url, PHP_URL_PATH), '/');
-    $fname = str_replace('.gz', '', $zname);
-
-    if ($a->is_download) {
-        echo "Downloading $url ...\n";
-        downloadFile($url, $out_dir . $zname);
-    }
-
-    if ($a->is_unzip) {
-        echo "Unpacking $zname to {$out_dir}{$fname} ...\n";
-        ungzip($out_dir . $zname, $out_dir . $fname, true);
-    }
-    $fnames[] = $fname;
-}
-
-$conn->executeQuery("
-    CREATE TABLE IF NOT EXISTS `title` (
-      `tconst` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-      `titleType` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-      `primaryTitle` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-      `originalTitle` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-      `isAdult` tinyint(1) NOT NULL,
-      `startYear` year(4) NOT NULL,
-      `endYear` year(4) NOT NULL,
-      `runtimeMinutes` smallint(5) unsigned NOT NULL,
-      `genres` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-      `averageRating` float NOT NULL,
-      `numVotes` int(10) unsigned NOT NULL,
-      `updated` datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      PRIMARY KEY (`tconst`),
-      KEY `averageRating` (`averageRating`),
-      KEY `endYear` (`endYear`),      
-      KEY `numVotes` (`numVotes`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-");
-
-if ($a->is_truncate_table) {
-    echo "Truncating db table 'title' ...\n";
-    $conn->executeQuery('TRUNCATE TABLE title');
-}
-
-if ($a->is_parse) {
-    foreach ($fnames as $fname) {
-        $fpath = $out_dir . $fname;
-        echo "Parsing {$out_dir}{$fname} ...\n";
-        $conn->beginTransaction();
-        $cnt = 0;
-        if (($handle = fopen($fpath, "r")) !== FALSE) {
-            while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
-                $cnt++;
-
-                if ($cnt === 1) {
-                    $fields = $data;
-                    continue;
+        if ($actions['-p'] || $actions['-t']) {
+            if (empty($config['DATABASE_URL']) || !is_string($config['DATABASE_URL'])) {
+                throw new RuntimeException('DATABASE_URL must be configured.');
+            }
+            try {
+                $conn = \Doctrine\DBAL\DriverManager::getConnection(['url' => $config['DATABASE_URL']]);
+                $params = $conn->getParams();
+                if (!in_array($params['driver'], ['pdo_sqlite', 'pdo_mysql'], true)) {
+                    throw new RuntimeException('Unsupported database driver.');
                 }
-
-                if ($fname === 'title.basics.tsv' && count($fields) === count($data)) {
-                    $d = array_combine($fields, $data);
-                    $d['updated'] = date('Y-m-d H:i:s');
-                    $_d = $d;
-                    unset($_d['tconst']);
-                    $affected_rows = $conn->update('title',
-                        $_d,
-                        ['tconst' => $d['tconst']]
-                    );
-                    if (!$affected_rows) {
-                        $conn->insert('title', $d);
+                $is_sqlite = $params['driver'] === 'pdo_sqlite';
+                if ($is_sqlite && !empty($params['path'])) {
+                    $db_dir = dirname($params['path']);
+                    if (!is_dir($db_dir) && !@mkdir($db_dir, 0777, true) && !is_dir($db_dir)) {
+                        throw new RuntimeException('Cannot create database directory.');
                     }
                 }
-
-                if ($fname === 'title.ratings.tsv') {
-                    list($tconst, $averageRating, $numVotes) = $data;
-                    $conn->update('title',
-                        ['averageRating' => $averageRating, 'numVotes' => $numVotes],
-                        ['tconst' => $tconst]
-                    );
-                }
-
-                if ($cnt % $portion === 0) {
-                    $conn->commit();
-                    echo "$cnt ";
-                    $conn->beginTransaction();
+                $conn->connect();
+            } catch (Throwable $error) {
+                throw new RuntimeException('Database connection failed. Check DATABASE_URL and the PDO extension.');
+            }
+            ensureSchema($conn, $is_sqlite);
+            if ($actions['-t']) {
+                $conn->executeStatement($is_sqlite ? 'DELETE FROM title' : 'TRUNCATE TABLE title');
+                echo "Cleared title table.\n";
+            }
+            if ($actions['-p']) {
+                foreach ($datasets as $name => $url) {
+                    $result = importDataset($conn, $out_dir . $name, $name, $portion);
+                    printf("%s: processed=%d committed=%d unmatched=%d queries=%d elapsed=%.3fs\n", $name, $result['processed'], $result['committed'], $result['unmatched'], $result['queries'], $result['elapsed']);
                 }
             }
-            fclose($handle);
-            $conn->commit();
         }
-        echo "\n$cnt processed\n\n";
+    } finally {
+        if ($conn !== null) {
+            $conn->close();
+        }
+        fclose($lock);
     }
+}
+
+$started = microtime(true);
+set_error_handler(function ($severity, $message) {
+    if (error_reporting() & $severity) {
+        throw new RuntimeException($message);
+    }
+    return false;
+});
+try {
+    cliMain(array_slice($argv, 1));
+    if ($argc > 1 && !in_array($argv[1], ['--help', '-h'], true)) {
+        printf("status=success elapsed=%.3fs peak_memory=%.2fMiB\n", microtime(true) - $started, memory_get_peak_usage(true) / 1048576);
+    }
+    exit(0);
+} catch (Throwable $error) {
+    $message = $error instanceof \Doctrine\DBAL\DBALException ? 'Database operation failed.' : $error->getMessage();
+    fwrite(STDERR, "status=failed: $message\n");
+    exit(1);
 }

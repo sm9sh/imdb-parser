@@ -2,12 +2,13 @@
     "name": "sm9sh/imdb-parser",
     "type": "project",
     "keywords": ["imdb", "parser"],
-    "description": "Simple parser for free IMDB datasets to mysql database",
+    "description": "Simple parser for free IMDB datasets to SQLite or MySQL database",
     "license": "MIT",
     "require": {
-        "php": ">=7.0",
-        "doctrine/dbal": "^2.13",
+        "php": "^8.2",
+        "doctrine/dbal": "^2.13.9",
         "ext-curl": "*",
+        "ext-pdo_sqlite": "*",
         "ext-zlib": "*"
     },
     "authors": [
@@ -17,6 +18,7 @@
         }
     ],
     "scripts": {
-        "post-create-project-cmd": ["php run.php"]
+        "post-create-project-cmd": ["@php run.php --help"],
+        "test": "@php tests/run.php"
     }
 }
