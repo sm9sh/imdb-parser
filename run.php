@@ -3,6 +3,7 @@
 function printHelp() {
     echo "Usage: php run.php [-d] [-u] [-p] [-t] [-a]\n";
     echo "-d : Download\n-u : Unzip\n-p : Import\n-t : Clear title table (explicit only)\n-a : Download, unzip and import; preserves existing titles\n-h, --help : Show help\n";
+    echo "Import defaults to released movies and ended series by the current year (IMPORT_COMPLETED_ONLY).\n";
 }
 
 function cliMain($arguments) {
@@ -38,6 +39,11 @@ function cliMain($arguments) {
     if ($actions['-p'] && (!is_int($portion) || $portion < 1)) {
         throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
     }
+    $completed_only = array_key_exists('IMPORT_COMPLETED_ONLY', $config) ? $config['IMPORT_COMPLETED_ONLY'] : true;
+    if ($actions['-p'] && !is_bool($completed_only)) {
+        throw new RuntimeException('IMPORT_COMPLETED_ONLY must be a boolean.');
+    }
+    $completed_year = $completed_only === true ? (int) date('Y') : null;
     $out_dir = $config['DOWNLOAD_DIR'] ?? __DIR__ . '/exchange';
     if (!is_string($out_dir) || $out_dir === '') {
         throw new RuntimeException('DOWNLOAD_DIR must be a nonempty path.');
@@ -111,8 +117,8 @@ function cliMain($arguments) {
             }
             if ($actions['-p']) {
                 foreach ($datasets as $name => $url) {
-                    $result = importDataset($conn, $out_dir . $name, $name, $portion);
-                    printf("%s: processed=%d committed=%d unmatched=%d queries=%d elapsed=%.3fs\n", $name, $result['processed'], $result['committed'], $result['unmatched'], $result['queries'], $result['elapsed']);
+                    $result = importDataset($conn, $out_dir . $name, $name, $portion, $completed_year);
+                    printf("%s: processed=%d committed=%d skipped=%d unmatched=%d queries=%d elapsed=%.3fs\n", $name, $result['processed'], $result['committed'], $result['skipped'], $result['unmatched'], $result['queries'], $result['elapsed']);
                 }
             }
         }

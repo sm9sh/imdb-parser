@@ -49,6 +49,7 @@ try {
     $config = [
         'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', $directory) . '/db/imdb.sqlite',
         'TRANSACTION_PORTION' => 2,
+        'IMPORT_COMPLETED_ONLY' => false,
         'DOWNLOAD_DIR' => $directory . '/exchange/',
     ];
     file_put_contents($directory . '/config.php', '<?php return ' . var_export($config, true) . ';');

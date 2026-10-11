@@ -45,13 +45,24 @@ Flags may be combined, for example `-u -p`. `-a` never implies `-t`. File/header
 
 The project lock prevents two CLI processes in the same checkout from changing shared files. It does not coordinate different hosts or checkouts. Close other SQLite writers before import or backup.
 
+## Title selection
+
+The CLI defaults to `IMPORT_COMPLETED_ONLY => true`, including configs without this key. The current year is read once per run. Import only:
+
+- `movie` with a known `startYear` no later than the current year.
+- `tvSeries` and `tvMiniSeries` with a known `endYear` no later than the current year.
+
+Other types, unknown required years and future years are skipped. Ratings update only matching selected titles. IMDb provides release/start and series end years; these rules approximate completion and cannot confirm exact release or finale dates. See the [dataset specification](https://data.imdb.com/non-commercial-datasets/).
+
+Both archives still download in full; filtering happens during import. Set `IMPORT_COMPLETED_ONLY => false` explicitly to import every type. The value must be a PHP boolean. Import does not delete previous titles that fall outside the filter. Back up and prune existing data separately when needed.
+
 ## Data, failures and schema
 
 The importer preserves literal quotes, UTF-8, long titles and empty trailing fields. `\N` becomes SQL NULL. Years use integers, including 1894; missing numeric fields and ratings stay NULL. Invalid headers, column counts, identifiers or numbers stop the import and report the file and line.
 
-Basics uses upsert by `tconst`; the last duplicate wins. Records absent from a later dataset remain in the database. Basics leaves ratings intact. Ratings update existing titles; unmatched rows are counted and do not create incomplete titles. `updated` uses the database's `CURRENT_TIMESTAMP` (UTC in SQLite).
+Basics uses upsert by `tconst`; the last duplicate wins. Records absent from a later dataset remain in the database. Basics leaves ratings intact. Ratings update selected existing titles; rows without an eligible match are counted as unmatched and do not create incomplete titles. `updated` uses the database's `CURRENT_TIMESTAMP` (UTC in SQLite).
 
-Each committed transaction remains saved. A failure rolls back the current transaction; it does not undo earlier batches or the completed basics import. Fix the input or environment, then repeat `-p` from the start. No resume checkpoint is required. Exit 0 means success; errors use stderr and exit 1. Summaries show processed/committed rows, unmatched ratings, data SQL statement count, elapsed time and PHP peak memory.
+Each committed transaction remains saved. A failure rolls back the current transaction; it does not undo earlier batches or the completed basics import. Fix the input or environment, then repeat `-p` from the start. No resume checkpoint is required. Exit 0 means success; errors use stderr and exit 1. Summaries show processed/committed rows, skipped basics, unmatched ratings, data SQL statement count, elapsed time and PHP peak memory. Basics counts only selected rows; skipped rows do not enter transactions. Ratings counts include unmatched rows, so committed is not the number of changed titles.
 
 Downloads use timeouts and retry temporary network/HTTP failures. Download and extraction write separate temporary files and validate gzip content, checksum and trailer before replacing the destination. Failed transfers preserve the previous destination and attempt to clean up temporary files. If the OS blocks deletion, a .part file can remain without a residual-path diagnostic; inspect the download directory after a failed operation. Single-member gzip streams are supported.
 
@@ -71,6 +82,6 @@ composer validate --no-check-publish
 composer check-platform-reqs
 ```
 
-Tests use explicit assertions, their own temporary SQLite files and a local HTTP fixture. They do not load your config, use MySQL or contact IMDb. No coverage threshold is set. The suite covers parsing, duplicate updates, unmatched ratings, transaction failure/retry, CLI side effects/locking, timeout, HTTP errors and corrupted gzip. Benchmark databases are disposable. See [measured results](docs/import-benchmark.md).
+Tests use explicit assertions, their own temporary SQLite files and a local HTTP fixture. They do not load your config, use MySQL or contact IMDb. No coverage threshold is set. The suite covers parsing, completion filters and year boundaries, duplicate updates, unmatched ratings, transaction failure/retry, CLI side effects/locking, timeout, HTTP errors and corrupted gzip. Benchmark databases are disposable. See [measured results](docs/import-benchmark.md).
 
 IMDb datasets are for personal/non-commercial use, subject to [IMDb's terms and dataset specification](https://data.imdb.com/non-commercial-datasets/).

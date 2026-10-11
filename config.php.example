@@ -3,6 +3,7 @@
 return [
     'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', __DIR__) . '/db/imdb.sqlite',
     'TRANSACTION_PORTION' => 2000,
+    'IMPORT_COMPLETED_ONLY' => true,
     'CONNECT_TIMEOUT' => 10,
     'TRANSFER_TIMEOUT' => 3600,
     'DOWNLOAD_RETRIES' => 2,

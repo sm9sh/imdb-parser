@@ -10,7 +10,7 @@
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 36 сценаріїв у 10 test files. Усі етапи завершено. Повний import і repeat пройшли; усі поля обох datasets незалежно звірено за tconst. Результати — у `docs/import-benchmark.md`. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 41 сценарій у 11 test files. Поточний відбір і очищення робочої бази описано в секції від 2026-10-11. Усі етапи завершено. Повний import і repeat без фільтра пройшли; усі поля обох datasets незалежно звірено за tconst. Результати — у `docs/import-benchmark.md`. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
 
 ## Початковий огляд MySQL backend
 
@@ -160,3 +160,23 @@
 Перший working import завершився з помилкою запису після 7028000 committed basics; поточні 100 rows відкочено. Причину не підтверджено: ті самі rows пройшли rollback-only проби, а база після failure мала quick_check = ok. Другий запуск завершився з exit 0 без змін production code: 8701401 basics / 1215671 ratings, unmatched 0, elapsed 2792.608 s, PHP peak 4 MiB. Незалежна read-only звірка всіх 9/3 source fields за tconst пройшла за 583.552 s: counts і NULL counts збігаються, partial ratings 0, quick_check = ok. Working database має 1571422208 bytes. Logs збережено в `db/import-20261007-b64026fe/`. Push і PR не виконувалися.
 
 2026-10-09: повторний cleanup прибрав початковий `.superpowers/working-import-b64026fe/` через переміщення до `db/import-20261007-b64026fe/diagnostic-workspace/`. Усі 23 files збережено без змін; перед move створено ZIP-копію з перевіркою SHA-256 кожного файла. Recursive delete знову відхилив automatic approval review (`blocked by policy` без докладної причини), тому files залишено в ignored evidence directory. Working database і backup metadata не змінилися. Production code не змінювався.
+
+## Відбір завершених фільмів і серіалів — 2026-10-11
+
+За уточненням користувача CLI тепер за замовчуванням імпортує лише:
+
+- `movie` з відомим `startYear` не пізніше поточного року;
+- `tvSeries` і `tvMiniSeries` з відомим `endYear` не пізніше поточного року.
+
+Рік визначається один раз на запуск. Дані дають лише роки, тому відбір не підтверджує точну дату виходу або фіналу. Архіви IMDb завантажуються повністю; фільтр діє під час import. `IMPORT_COMPLETED_ONLY` має boolean value і default `true` навіть у попередньому config без цього ключа; `false` явно повертає повний import. Schema не змінюється.
+
+- [x] Basics пропускає інші типи, невідомі потрібні роки та майбутні роки до формування batches. Summary містить `skipped`.
+- [x] Ratings оновлює лише відповідні наявні titles. `unmatched` включає відсутні або невідповідні записи. Для ratings processed/committed включає unmatched rows; це не кількість змінених titles.
+- [x] Нові фільтри перевірено RED → GREEN. Усі 41 сценарій у 11 test files пройшли на PHP 8.2.34, включно з year boundaries, default config, repeat, збереженням виключених ratings та rollback із пропущеними рядками. Lint змінених PHP files і help пройшли.
+- [x] За прямим запитом користувача робочу базу очищено окремою транзакцією, потім виконано `VACUUM`. Звичайний `-p`/`-a` автоматично не видаляє попередні записи поза фільтром.
+
+До очищення: 8 701 401 titles, 1 571 422 208 bytes. Створено consistent backup через `VACUUM INTO`: `db/completed-filter-20261011-88b3bf20/imdb-before-completed-filter.sqlite` (1 381 228 544 bytes). Backup counts збігаються; `quick_check = ok`.
+
+Видалено 8 089 311 titles. Залишилося 612 090: 524 415 movies, 69 285 tvSeries і 18 390 tvMiniSeries; 311 421 мають ratings. SHA-256 усіх збережених полів за tconst до DELETE, після DELETE та після VACUUM збігається. Поточний файл має 97 026 048 bytes (92.531 MiB замість 1498.625 MiB). Незалежна read-only перевірка підтвердила invalid rows 0, partial ratings 0, free pages 0 і `quick_check = ok`.
+
+Evidence: `db/completed-filter-20261011-88b3bf20/result.json` та `verification.json`. Backup, database й допоміжні scripts залишаються ignored. Раніші full-import вимірювання стосуються версії без фільтра; їх не повторювали для нової політики.

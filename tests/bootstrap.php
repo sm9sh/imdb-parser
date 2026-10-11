@@ -27,6 +27,8 @@ function testConfig($directory, $settings = []) {
         'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', $directory) . '/db/imdb.sqlite',
         'DOWNLOAD_DIR' => $directory . '/exchange',
         'TRANSACTION_PORTION' => 2,
+        // Keep the original full-dataset regression fixtures explicit.
+        'IMPORT_COMPLETED_ONLY' => false,
     ], $settings);
     file_put_contents($directory . '/config.php', '<?php return ' . var_export($config, true) . ';');
 }
