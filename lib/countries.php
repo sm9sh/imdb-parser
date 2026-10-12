@@ -190,7 +190,7 @@ function fetchCountryBatch($ids, $settings) {
                     if (stripos($header, 'Retry-After:') === 0) {
                         $value = trim(substr($header, 12));
                         $seconds = ctype_digit($value) ? (float) $value : max(0, (strtotime($value) ?: 0) - time());
-                        $retry_after = (int) min(60, $seconds);
+                        $retry_after = $seconds;
                     }
                     return strlen($header);
                 },
@@ -207,6 +207,9 @@ function fetchCountryBatch($ids, $settings) {
         }
         $transient = in_array($status, [408, 425, 429, 500, 502, 503, 504], true) ||
             in_array($error, [CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT, CURLE_PARTIAL_FILE, CURLE_RECV_ERROR, CURLE_SEND_ERROR], true);
+        if ($transient && $retry_after > 60) {
+            throw new RuntimeException(sprintf('Wikidata Retry-After exceeds 60 seconds (%.0f seconds required); rerun after cooldown. Country cache preserved.', $retry_after));
+        }
         if (!$transient || $attempt === $settings['retries']) {
             throw new RuntimeException("Wikidata request failed (HTTP $status, cURL $error); country cache preserved.");
         }

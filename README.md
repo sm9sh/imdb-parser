@@ -58,7 +58,7 @@ Both archives still download in full; filtering happens during import. Set `IMPO
 
 ## Wikidata countries
 
-IMDb remains the source of title metadata and ratings. Country enrichment uses Wikidata IMDb IDs (P345), countries of origin (P495), and optional ISO alpha-2 codes (P297). Multiple countries are stored separately; historical countries without a code retain their QID.
+IMDb remains the source of title metadata and ratings. Country enrichment uses Wikidata IMDb IDs (P345), countries of origin (P495), and optional ISO alpha-2 codes (P297). Multiple countries are stored separately; historical countries without a code retain their QID. Wikidata SomeValue blank nodes and Skolem URIs are treated as unknown values; an unknown ISO code preserves the country QID.
 
 Country mode is disabled when `WIKIDATA_COUNTRIES_ENABLED` is absent or false. Set it to true after the explicit migration:
 
@@ -72,7 +72,7 @@ Migration requires SQLite 3.27.0+ for `VACUUM INTO`. It saves a verified backup 
 
 Settings: `EXCLUDE_COUNTRIES` defaults to `['IN']`; `WIKIDATA_REFRESH_DAYS` defaults to 30. `WIKIDATA_ENDPOINT` defaults to the public SPARQL endpoint. Production endpoints must use HTTPS without URL credentials; HTTP is allowed only on loopback for fixtures. No API key or extra dependency is required.
 
-With country mode enabled, `-p`/`-a` first stream eligible basics IDs and refresh their cache, then import with local country checks. Network access runs before title transactions and before clearing for `-t -p`. Initial enrichment can take many requests. Requests are sequential, with batches of 100 IDs, a 2 MiB response limit, timeouts and bounded transient retries. HTTP failures stop import; they do not become unknown results. Completed cache batches remain saved after a later failure.
+With country mode enabled, `-p`/`-a` first stream eligible basics IDs and refresh their cache, then import with local country checks. Network access runs before title transactions and before clearing for `-t -p`. Initial enrichment can take many requests. Requests are sequential, with batches of 100 IDs, a 2 MiB response limit, timeouts and bounded transient retries. Transient retries honor Retry-After up to 60 seconds. A longer server cooldown stops with the required delay; rerun after that interval. It never retries early. HTTP failures stop import; they do not become unknown results. Completed cache batches remain saved after a later failure.
 
 India is excluded if a country has code `IN` or QID `Q668`, including co-productions. Basics and ratings for excluded existing titles stay unchanged; import does not delete them. Unknown countries are retained. Country lookup counters describe newly refreshed IDs; `country_unknown` in basics counts selected rows with no country. `country_skipped` counts basics excluded by country and also contributes to `skipped`. Ratings without an eligible match count as unmatched.
 

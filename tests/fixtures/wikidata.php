@@ -10,6 +10,12 @@ if ($mode === '/404' || $mode === '/500' || ($mode === '/retry' && $count === 0)
     echo '{}';
     return;
 }
+if ($mode === '/retry-long' || $mode === '/retry-date') {
+    http_response_code($mode === '/retry-long' ? 429 : 503);
+    header('Retry-After: ' . ($mode === '/retry-long' ? '300' : gmdate('D, d M Y H:i:s', time() + 300) . ' GMT'));
+    echo '{}';
+    return;
+}
 if ($mode === '/fail-second' && $count > 0) { http_response_code(503); echo '{}'; return; }
 if ($mode === '/slow') { sleep(2); }
 if ($mode === '/json') { echo '{broken'; return; }

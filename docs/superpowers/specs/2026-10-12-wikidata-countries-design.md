@@ -1,13 +1,13 @@
 # Wikidata country enrichment
 
 Дата: 2026-10-12. Repository: imdb-parser. Runtime: PHP 8.2, SQLite.
-Статус: дизайн для перегляду; product code та working database ще не змінювалися.
+Статус: погоджений дизайн реалізовано; explicit migration і limited live перевірка виконані, local country mode активовано. Незалежний final review завершено; одна material finding щодо Retry-After виправлена з regression tests.
 
 ## Мета та погоджені межі
 
 IMDb залишається джерелом basics і ratings. З Wikidata отримуємо лише країни походження через IMDb ID (P345) та country of origin (P495). Країни використовуємо для SQL-вибірки й виключення індійських фільмів і серіалів під час import. Попередній відбір released movies та ended tvSeries/tvMiniSeries залишається.
 
-За замовчуванням виключаємо title, якщо серед його країн є Індія, включно зі спільними виробництвами. Невідома країна не означає, що title не індійський: такі записи зберігаємо й рахуємо окремо. Це припущення для підтвердження під час перегляду.
+За замовчуванням виключаємо title, якщо серед його країн є Індія, включно зі спільними виробництвами. Невідома країна не означає, що title не індійський: такі записи зберігаємо й рахуємо окремо. Цю політику погоджено перед реалізацією.
 
 Наявні індійські titles автоматично не видаляємо: користувач попросив фільтр при додаванні. Очищення наявних даних потребуватиме окремого конкретного запиту. Визначення країни за назвою, мовою або IMDb akas.region не використовуємо. Повний перехід на Wikidata, інші metadata, UI та scheduler не входять у зміну.
 
@@ -47,7 +47,7 @@ Config: WIKIDATA_COUNTRIES_ENABLED, EXCLUDE_COUNTRIES (default [IN]), WIKIDATA_R
 
 ## Failure handling та counters
 
-HTTP має явний User-Agent, connect timeout 10 s, read timeout 60 s, response limit 2 MiB і максимум 2 retries для transient failures. HTTP 429 враховує Retry-After; процес зупиняється після вичерпання retries. Звичайні requests виконуються послідовно.
+HTTP має явний User-Agent, connect timeout 10 s, read timeout 60 s, response limit 2 MiB і максимум 2 retries для transient failures. HTTP 429/503 враховує Retry-After до 60 s. Довший cooldown дає nonzero exit із required delay замість завчасного retry; процес зупиняється після вичерпання retries. Звичайні requests виконуються послідовно.
 
 Усі rows відповіді перевіряємо перед cache commit: requested IMDb IDs, country entity URIs і ISO codes. Відповідь має охоплювати кожен запитаний ID, включно з unknown results. Country rows і checked_at замінюємо одним атомарним batch. Попередній cache зберігається при помилці.
 
@@ -66,7 +66,7 @@ Summary розділяє checked IDs, country-known/unknown IDs, skipped-by-coun
 
 Готово після проходження нового test file, повного suite й lint, explicit migration з backup та обмеженої live звірки з Wikidata. Повне заповнення 612 тисяч titles — окрема тривала фаза з видимими counters та можливістю повторного запуску; ETA без вимірювання не заявляємо.
 
-Live read-only probe 2026-10-12: HTTP 200, valid SPARQL JSON, 0.508 s для 5 IDs. tt1187043, tt5074352 і tt8178634 дали Q668/IN; tt0133093 дав Q30/US та Q408/AU; контрольний unknown ID дав row без країни. Покриття всієї working database ще не виміряне.
+Початковий read-only probe 2026-10-12: HTTP 200, valid SPARQL JSON, 0.508 s для 5 IDs. tt1187043, tt5074352 і tt8178634 дали Q668/IN; tt0133093 дав Q30/US та Q408/AU; контрольний unknown ID дав row без країни. Після реалізації CLI перевірив перші 100 titles (45 known, 55 unknown), а PHP cURL — ще 4 live приклади. Country cache містить 104 checked IDs, 49 known, 55 unknown і 50 country rows. Local mode enabled, excluded [IN]; 611 986 stored titles ще не перевірено. Повний backfill залишається окремою фазою.
 
 ## Джерела
 
@@ -74,4 +74,7 @@ Live read-only probe 2026-10-12: HTTP 200, valid SPARQL JSON, 0.508 s для 5 I
 - [P495: country of origin](https://www.wikidata.org/wiki/Property:P495)
 - [P297: ISO alpha-2 code](https://www.wikidata.org/wiki/Property:P297)
 - [Wikidata data access](https://www.wikidata.org/wiki/Wikidata:Data_access)
+- [SomeValue and Skolemization](https://www.mediawiki.org/wiki/Wikidata_Query_Service/Blank_Node_Skolemization)
 - [WDQS limits](https://www.mediawiki.org/wiki/Wikidata_Query_Service/Implementation)
+
+Migration backup: db/imdb-before-countries-20261012-140621-e5dc9d1a.sqlite. Усі поля 612 090 titles та 311 421 ratings збережено: SHA-256 before/backup/after b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; quick_check = ok. Evidence: db/wikidata-countries-20261012/.

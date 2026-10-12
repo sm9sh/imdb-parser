@@ -180,3 +180,19 @@
 Видалено 8 089 311 titles. Залишилося 612 090: 524 415 movies, 69 285 tvSeries і 18 390 tvMiniSeries; 311 421 мають ratings. SHA-256 усіх збережених полів за tconst до DELETE, після DELETE та після VACUUM збігається. Поточний файл має 97 026 048 bytes (92.531 MiB замість 1498.625 MiB). Незалежна read-only перевірка підтвердила invalid rows 0, partial ratings 0, free pages 0 і `quick_check = ok`.
 
 Evidence: `db/completed-filter-20261011-88b3bf20/result.json` та `verification.json`. Backup, database й допоміжні scripts залишаються ignored. Раніші full-import вимірювання стосуються версії без фільтра; їх не повторювали для нової політики.
+
+## Країни з Wikidata та виключення Індії — 2026-10-12
+
+Реалізовано окремий country cache за IMDb ID P345, country of origin P495 та optional ISO P297. IMDb лишається джерелом basics/ratings. Country mode не змінює попередній completion filter. Country rows зберігаються за QID, включно з co-productions і historical countries без ISO. SomeValue blank nodes/Skolem URIs означають невідоме значення.
+
+- [x] Explicit `--migrate-countries`: verified backup, дві таблиці та indexes, повторна migration без змін.
+- [x] `--countries [--country-limit=N]`: послідовні batches до 100 IDs, 30-day positive/negative cache, повторний запуск пропускає fresh entries. Malformed/incomplete/HTTP failure не стає unknown; batch replacement атомарний.
+- [x] При `-p`/`-a` country preflight завершується до title transactions та `-t`. Q668 або IN виключає basics та ratings, включно з co-productions. Unknown titles зберігаються. Existing Indian titles автоматично не видалено.
+- [x] Tests RED -> GREEN: 10 country і 11 CLI scenarios; final full suite 62/62 у 13 files, PHP lint та diff whitespace пройшли.
+- [x] Working migration backup: `db/imdb-before-countries-20261012-140621-e5dc9d1a.sqlite`. SHA-256 усіх title fields before/backup/after збігається; 612 090 titles і 311 421 rated records збережено; `quick_check = ok`.
+- [x] CLI live pilot: 100 checked, 45 known, 55 unknown, 1.285 s. Додаткові 4 приклади дали Q668/IN для tt1187043, tt5074352, tt8178634 та Q30/US + Q408/AU для tt0133093; повторний lookup використав cache без HTTP.
+- [x] Ignored local config активовано: `WIKIDATA_COUNTRIES_ENABLED => true`, `EXCLUDE_COUNTRIES => ['IN']`.
+- [x] Final independent review: одна P2 finding про скорочений Retry-After. Numeric/date headers понад 60 s тепер завершують процес із required delay без early retry; regression RED -> GREEN. Critical/Minor findings немає.
+- [ ] Повний backfill 611 986 stored titles: `.\run.bat --countries`; це окрема тривала фаза, ще не виконана. Coverage limited sample: 104 checked, 49 known, 55 unknown, 50 country rows.
+
+Source commits: `879c04f`, `2eaea94`. Operational evidence: `db/wikidata-countries-20261012/`. Country selection SQL і commands наведено в README. Дані спільноти Wikidata не гарантують повного покриття, тому unknown result не підтверджує відсутність Індії.

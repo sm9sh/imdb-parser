@@ -37,6 +37,35 @@ runTests([
             expect(count(glob($directory . '/db/imdb-before-countries-*.sqlite')) === 1, 'Repeated migration created backup.');
         });
     },
+    'long Retry-After delta and date stop without early retry or clearing' => function () {
+        foreach (['retry-long', 'retry-date'] as $mode) {
+            countryCase(function ($directory, $conn, $path, $url) {
+                migrateCountrySchema($conn, $path);
+                countryCliConfig($directory, $url, ['DOWNLOAD_RETRIES' => 2]);
+                countryCliFiles($directory);
+                $conn->executeStatement("INSERT INTO title (tconst,titleType,primaryTitle,originalTitle,isAdult,startYear) VALUES ('tt1','movie','Saved','Saved',0,2000)");
+                $conn->executeStatement("INSERT INTO title_country VALUES ('tt1','Q30','US')");
+                $conn->executeStatement("INSERT INTO country_lookup VALUES ('tt1','2000-01-01 00:00:00')");
+                $process = proc_open([PHP_BINARY, $directory . '/run.php', '-t', '-p'], [1 => ['file', $directory . '/stdout', 'w'], 2 => ['file', $directory . '/stderr', 'w']], $pipes, $directory);
+                expect(is_resource($process), 'Cannot start cooldown CLI.');
+                try {
+                    $deadline = microtime(true) + 3;
+                    do {
+                        usleep(20000);
+                        $state = proc_get_status($process);
+                    } while ($state['running'] && microtime(true) < $deadline);
+                } finally {
+                    if (proc_get_status($process)['running']) { proc_terminate($process); }
+                    proc_close($process);
+                }
+                expect(!$state['running'], 'Long Retry-After was shortened or allowed an unbounded wait.');
+                expect($state['exitcode'] !== 0 && strpos(file_get_contents($directory . '/stderr'), 'Retry-After exceeds 60 seconds') !== false, 'Cooldown failure lacks required delay.');
+                expect((int) file_get_contents($directory . '/country-count') === 1, 'Retried before server cooldown.');
+                expect($conn->fetchColumn("SELECT primaryTitle FROM title WHERE tconst='tt1'") === 'Saved', 'Cooldown failure cleared titles.');
+                expect($conn->fetchColumn("SELECT country_code FROM title_country WHERE tconst='tt1'") === 'US' && $conn->fetchColumn("SELECT checked_at FROM country_lookup WHERE tconst='tt1'") === '2000-01-01 00:00:00', 'Cooldown failure changed cache.');
+            }, $mode);
+        }
+    },
     'import filters India and co-production while retaining unknown completed titles' => function () {
         countryCase(function ($directory, $conn, $path, $url) {
             migrateCountrySchema($conn, $path);

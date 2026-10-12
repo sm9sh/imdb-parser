@@ -45,13 +45,23 @@ Interfaces: completedTitle(row,year), syncCountryDataset(conn,path,year,settings
 
 ## Task 3: Verification, documentation and activation
 Files: update README.md, PLAN.md and this plan/spec status.
-- [ ] Document commands, cache/unknown semantics, country SQL JOIN example and first-import network cost.
-- [ ] Lint changed PHP files and run full suite; inspect the final diff.
-- [ ] Run explicit migration on working SQLite, verify backup and retained title data.
-- [ ] Run --countries --country-limit=100 and an explicit small live lookup for Indian and co-production examples. Record counts and source results without claiming full coverage.
-- [ ] Enable country mode in ignored local config after successful migration/live check.
-- [ ] Obtain an independent review of the final feature diff; resolve material findings with regression tests.
-- [ ] Commit verified changes; report measured sample coverage, remaining full backfill and backup path.
+- [x] Document commands, cache/unknown semantics, country SQL JOIN example and first-import network cost.
+- [x] Lint changed PHP files and run full suite; inspect the final diff.
+- [x] Run explicit migration on working SQLite, verify backup and retained title data.
+- [x] Run --countries --country-limit=100 and an explicit small live lookup for Indian and co-production examples. Record counts and source results without claiming full coverage.
+- [x] Enable country mode in ignored local config after successful migration/live check.
+- [x] Obtain an independent review of the final feature diff; resolve material findings with regression tests.
+- [x] Commit verified changes; report measured sample coverage, remaining full backfill and backup path.
 
 ## Execution Record
 Task 1: country module RED (missing functions) -> GREEN, 9 country scenarios passed; baseline plus task suite 50/50 passed in 12 files. Task 2: 10 CLI scenarios RED (unknown flags, missing filter/preflight) -> GREEN. Official Wikidata SomeValue blank-node/Skolem forms exposed a parser failure; added regression RED -> GREEN without guessing country codes. Full suite 61/61 scenarios in 13 files passed; all changed PHP files linted; diff whitespace clean. Full 612k-title country backfill remains a separate long-running operation.
+
+Task 3: migration backup db/imdb-before-countries-20261012-140621-e5dc9d1a.sqlite; before/backup/after full-title SHA-256 matched, title_count=612090, rated=311421, quick_check=ok. Pilot100 returned45 known/55unknown; 4 explicit public examples confirmed India and US/AU. Cache104 checked/49known/55unknown,50rows;611986 stored titles remain. Local country mode enabled. Repeated public sample used fresh cache with checked=0. Evidence db/wikidata-countries-20261012/.
+
+Final review: fresh gpt-6-astra reviewed c3b0107..2eaea94; five focus checks passed, independently ran20/20 country/CLI scenarios; no Critical or Minor findings. One Important/P2: Retry-After above60 seconds truncated, causing early retry. Regression with HTTP429 delta300 and HTTP503 date+300 failed before fix, passed after fix; Final: fixed long Retry-After — numeric/date CLI regression RED -> GREEN; full suite 62/62 in 13 files, exit0, lint and whitespace clean.
+Final: Ruling: stop when server Retry-After exceeds60 seconds instead of waiting indefinitely — honors server cooldown within the bounded client policy — cost: manual rerun after the reported interval.
+Final: Ruling: full612k backfill remains a separate operation — approved spec explicitly separates it from readiness — cost:611986 stored titles have no lookup yet.
+Final: Ruling: accept activation and preservation from the executor's live measurements — reviewer deliberately did not access working config/database; fingerprints and local state were independently checked against the backup — cost: live HTTP/filter examples cover only104 IDs.
+Final: Ruling: do not claim complete Wikidata coverage — unknown rows are retained by the approved policy, and fixture/live samples cannot prove all community data — cost: Indian titles without known P495 can pass the filter.
+
+Task 3: complete; all readiness checks passed. Final full suite log: db/wikidata-countries-20261012/suite-final.log. Existing branch codex/complete-cli retained; user-authorized verified commits only, no merge/push/PR.
