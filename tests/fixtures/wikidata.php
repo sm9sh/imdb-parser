@@ -37,6 +37,15 @@ foreach ($ids as $id) {
         $bindings[] = $row;
     }
 }
+if ($mode === '/somevalue' || $mode === '/bnode') {
+    $unknown = $mode === '/bnode' ? ['type' => 'bnode', 'value' => 'unknown'] :
+        ['type' => 'uri', 'value' => 'http://www.wikidata.org/.well-known/genid/unknown'];
+    foreach ($bindings as &$row) {
+        if ($row['imdb']['value'] === 'tt4') { $row['country'] = $unknown; }
+        if ($row['imdb']['value'] === 'tt1') { $row['code'] = $unknown; }
+    }
+    unset($row);
+}
 if ($mode === '/foreign') { $bindings[] = ['imdb' => ['type' => 'literal', 'value' => 'tt99999']]; }
 if ($mode === '/duplicate' && $bindings) { $bindings[] = $bindings[0]; }
 echo json_encode(['head' => ['vars' => ['imdb', 'country', 'code']], 'results' => ['bindings' => $bindings]]);

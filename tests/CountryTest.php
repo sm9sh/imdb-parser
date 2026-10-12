@@ -30,6 +30,17 @@ runTests([
             expect((int) file_get_contents($directory . '/country-count') === 1, 'Fresh cache requested again.');
         });
     },
+    'Wikidata SomeValue preserves known QIDs and caches unknown countries' => function () {
+        foreach (['somevalue', 'bnode'] as $mode) {
+            countryCase(function ($directory, $conn, $path, $url) {
+                migrateCountrySchema($conn, $path);
+                $stats = syncCountryIds($conn, ['tt1', 'tt4'], fixtureCountrySettings($url));
+                expect($stats === ['checked' => 2, 'known' => 1, 'unknown' => 1], 'SomeValue counts wrong.');
+                expect($conn->fetchAllAssociative("SELECT country_qid,country_code FROM title_country WHERE tconst='tt1'") === [['country_qid' => 'Q668', 'country_code' => null]], 'Unknown ISO lost India QID.');
+                expect($conn->fetchColumn("SELECT COUNT(*) FROM country_lookup WHERE tconst='tt4'") == 1 && $conn->fetchColumn("SELECT COUNT(*) FROM title_country WHERE tconst='tt4'") == 0, 'Unknown country not cached.');
+            }, $mode);
+        }
+    },
     'expired cache replaces countries atomically' => function () {
         countryCase(function ($directory, $conn, $path, $url) {
             migrateCountrySchema($conn, $path);

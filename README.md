@@ -56,6 +56,38 @@ Other types, unknown required years and future years are skipped. Ratings update
 
 Both archives still download in full; filtering happens during import. Set `IMPORT_COMPLETED_ONLY => false` explicitly to import every type. The value must be a PHP boolean. Import does not delete previous titles that fall outside the filter. Back up and prune existing data separately when needed.
 
+## Wikidata countries
+
+IMDb remains the source of title metadata and ratings. Country enrichment uses Wikidata IMDb IDs (P345), countries of origin (P495), and optional ISO alpha-2 codes (P297). Multiple countries are stored separately; historical countries without a code retain their QID.
+
+Country mode is disabled when `WIKIDATA_COUNTRIES_ENABLED` is absent or false. Set it to true after the explicit migration:
+
+```powershell
+.\run.bat --migrate-countries
+.\run.bat --countries --country-limit=100
+.\run.bat --countries
+```
+
+Migration requires SQLite 3.27.0+ for `VACUUM INTO`. It saves a verified backup beside the database before creating `title_country` and `country_lookup`. It does not change title columns. Both new actions run standalone; `--country-limit` is a positive integer and applies only to `--countries`. A repeated sync skips fresh entries and resumes missing or stale IDs. Repeated migration validates the existing schema without creating another backup. Partial or incompatible country schemas require explicit repair.
+
+Settings: `EXCLUDE_COUNTRIES` defaults to `['IN']`; `WIKIDATA_REFRESH_DAYS` defaults to 30. `WIKIDATA_ENDPOINT` defaults to the public SPARQL endpoint. Production endpoints must use HTTPS without URL credentials; HTTP is allowed only on loopback for fixtures. No API key or extra dependency is required.
+
+With country mode enabled, `-p`/`-a` first stream eligible basics IDs and refresh their cache, then import with local country checks. Network access runs before title transactions and before clearing for `-t -p`. Initial enrichment can take many requests. Requests are sequential, with batches of 100 IDs, a 2 MiB response limit, timeouts and bounded transient retries. HTTP failures stop import; they do not become unknown results. Completed cache batches remain saved after a later failure.
+
+India is excluded if a country has code `IN` or QID `Q668`, including co-productions. Basics and ratings for excluded existing titles stay unchanged; import does not delete them. Unknown countries are retained. Country lookup counters describe newly refreshed IDs; `country_unknown` in basics counts selected rows with no country. `country_skipped` counts basics excluded by country and also contributes to `skipped`. Ratings without an eligible match count as unmatched.
+
+For example, select titles linked to Ukraine without duplicating co-productions:
+
+```sql
+SELECT t.* FROM title AS t
+WHERE EXISTS (
+    SELECT 1 FROM title_country AS c
+    WHERE c.tconst = t.tconst AND c.country_code = 'UA'
+);
+```
+
+Use `country_qid` to select a historical country without an ISO code. A missing `country_lookup` row means not yet checked; a lookup row with no countries means a successful unknown result. Country cache is preserved by `-t` and can contain excluded IDs absent from `title`. Full coverage is not guaranteed: [Wikidata properties](https://www.wikidata.org/wiki/Property:P495) are community data. See [WDQS access and limits](https://www.mediawiki.org/wiki/Wikidata_Query_Service/Implementation).
+
 ## Data, failures and schema
 
 The importer preserves literal quotes, UTF-8, long titles and empty trailing fields. `\N` becomes SQL NULL. Years use integers, including 1894; missing numeric fields and ratings stay NULL. Invalid headers, column counts, identifiers or numbers stop the import and report the file and line.

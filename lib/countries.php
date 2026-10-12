@@ -101,6 +101,12 @@ function countryIds($ids) {
     return array_values(array_unique($ids));
 }
 
+function countrySomeValue($binding) {
+    if (!is_array($binding) || !is_string($binding['value'] ?? null) || $binding['value'] === '') { return false; }
+    return ($binding['type'] ?? null) === 'bnode' || (($binding['type'] ?? null) === 'uri' &&
+        preg_match('~^https?://www\.wikidata\.org/\.well-known/genid/[^\s]+$~D', $binding['value']));
+}
+
 function parseCountryResponse($body, $ids) {
     try {
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
@@ -126,12 +132,16 @@ function parseCountryResponse($body, $ids) {
             continue;
         }
         $country = $row['country'];
+        if (countrySomeValue($country)) {
+            if (isset($row['code']) && !countrySomeValue($row['code'])) { throw new RuntimeException('Country code without country entity.'); }
+            continue;
+        }
         if (!is_array($country) || ($country['type'] ?? null) !== 'uri' ||
             !is_string($country['value'] ?? null) || !preg_match('~^https?://www\.wikidata\.org/entity/(Q[1-9][0-9]*)$~D', $country['value'], $match)) {
             throw new RuntimeException('Invalid Wikidata country entity.');
         }
         $code = '';
-        if (isset($row['code'])) {
+        if (isset($row['code']) && !countrySomeValue($row['code'])) {
             if (!is_array($row['code']) || ($row['code']['type'] ?? null) !== 'literal' ||
                 !is_string($row['code']['value'] ?? null) || !preg_match('/^[A-Z]{2}$/D', $row['code']['value'])) {
                 throw new RuntimeException('Invalid Wikidata ISO country code.');
@@ -233,6 +243,63 @@ function syncCountryIds($conn, $ids, $settings) {
     } catch (Throwable $error) {
         $conn->rollBack();
         throw $error;
+    }
+    return $stats;
+}
+
+function countryExclusionSql($codes) {
+    if (!$codes) { return ['0', []]; }
+    $sql = 'tc.country_code IN (' . implode(',', array_fill(0, count($codes), '?')) . ')';
+    $parameters = $codes;
+    if (in_array('IN', $codes, true)) { $sql .= ' OR tc.country_qid=?'; $parameters[] = 'Q668'; }
+    return [$sql, $parameters];
+}
+
+function syncCountryDataset($conn, $path, $year, $settings) {
+    $stats = ['checked' => 0, 'known' => 0, 'unknown' => 0];
+    $pending = [];
+    try {
+        foreach (readTsv($path, 'title.basics.tsv') as $row) {
+            if (!completedTitle($row, $year)) { continue; }
+            $pending[] = $row['tconst'];
+            if (count($pending) === 100) {
+                $batch = syncCountryIds($conn, $pending, $settings);
+                foreach ($stats as $key => $value) { $stats[$key] += $batch[$key]; }
+                $pending = [];
+                if ($stats['checked'] > 0 && $stats['checked'] % 1000 === 0) { echo "countries: checked={$stats['checked']} known={$stats['known']} unknown={$stats['unknown']}\n"; }
+            }
+        }
+        if ($pending) {
+            $batch = syncCountryIds($conn, $pending, $settings);
+            foreach ($stats as $key => $value) { $stats[$key] += $batch[$key]; }
+        }
+    } catch (Throwable $error) {
+        $reason = $error instanceof \Doctrine\DBAL\DBALException ? 'country database write failed.' : $error->getMessage();
+        throw new RuntimeException("Country preflight failed; checked={$stats['checked']} known={$stats['known']} unknown={$stats['unknown']}. $reason", 0, $error);
+    }
+    return $stats;
+}
+
+function syncStoredCountries($conn, $settings, $limit = null) {
+    assertCountrySchema($conn);
+    $stats = ['checked' => 0, 'known' => 0, 'unknown' => 0];
+    $cursor = '';
+    $visited = 0;
+    $cutoff = gmdate('Y-m-d H:i:s', time() - $settings['days'] * 86400);
+    try {
+        while ($limit === null || $visited < $limit) {
+            $size = $limit === null ? 100 : min(100, $limit - $visited);
+            $ids = $conn->fetchFirstColumn('SELECT t.tconst FROM title t WHERE t.tconst>? AND NOT EXISTS (SELECT 1 FROM country_lookup l WHERE l.tconst=t.tconst AND l.checked_at>=?) ORDER BY t.tconst LIMIT ' . $size, [$cursor, $cutoff]);
+            if (!$ids) { break; }
+            $batch = syncCountryIds($conn, $ids, $settings);
+            foreach ($stats as $key => $value) { $stats[$key] += $batch[$key]; }
+            $cursor = end($ids);
+            $visited += count($ids);
+            if ($stats['checked'] > 0 && $stats['checked'] % 1000 === 0) { echo "countries: checked={$stats['checked']} known={$stats['known']} unknown={$stats['unknown']}\n"; }
+        }
+    } catch (Throwable $error) {
+        $reason = $error instanceof \Doctrine\DBAL\DBALException ? 'country database write failed.' : $error->getMessage();
+        throw new RuntimeException("Country sync failed; checked={$stats['checked']} known={$stats['known']} unknown={$stats['unknown']}. $reason", 0, $error);
     }
     return $stats;
 }

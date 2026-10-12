@@ -3,6 +3,7 @@
 function printHelp() {
     echo "Usage: php run.php [-d] [-u] [-p] [-t] [-a]\n";
     echo "-d : Download\n-u : Unzip\n-p : Import\n-t : Clear title table (explicit only)\n-a : Download, unzip and import; preserves existing titles\n-h, --help : Show help\n";
+    echo "--migrate-countries : Back up SQLite and create country cache (standalone)\n--countries [--country-limit=N] : Refresh stored titles' countries (standalone)\n";
     echo "Import defaults to released movies and ended series by the current year (IMPORT_COMPLETED_ONLY).\n";
 }
 
@@ -11,15 +12,23 @@ function cliMain($arguments) {
         printHelp();
         return;
     }
-    $actions = ['-d' => false, '-u' => false, '-p' => false, '-t' => false];
+    $actions = ['-d' => false, '-u' => false, '-p' => false, '-t' => false, '--migrate-countries' => false, '--countries' => false];
+    $country_limit = null;
     foreach ($arguments as $argument) {
         if ($argument === '-a') {
             $actions['-d'] = $actions['-u'] = $actions['-p'] = true;
+        } elseif (str_starts_with($argument, '--country-limit=')) {
+            $country_limit = filter_var(substr($argument, 16), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($country_limit === false) { throw new RuntimeException('--country-limit must be a positive integer.'); }
         } elseif (array_key_exists($argument, $actions)) {
             $actions[$argument] = true;
         } else {
             throw new RuntimeException('Unknown argument. Use --help.');
         }
+    }
+    $country_action = $actions['--migrate-countries'] || $actions['--countries'];
+    if (($country_action && count(array_filter($actions)) !== 1) || ($country_limit !== null && !$actions['--countries'])) {
+        throw new RuntimeException('Country actions must run standalone; --country-limit requires --countries.');
     }
     if (!is_file(__DIR__ . '/config.php')) {
         throw new RuntimeException('Missing config.php. Copy config.php.example and review the settings.');
@@ -35,6 +44,9 @@ function cliMain($arguments) {
     require_once __DIR__ . '/vendor/autoload.php';
     require_once __DIR__ . '/lib/importer.php';
     require_once __DIR__ . '/lib/files.php';
+    require_once __DIR__ . '/lib/countries.php';
+    $country_settings = ($actions['-p'] || $country_action) ? countrySettings($config) : null;
+    $countries_enabled = $country_settings !== null && $country_settings['enabled'];
     $portion = $config['TRANSACTION_PORTION'] ?? 2000;
     if ($actions['-p'] && (!is_int($portion) || $portion < 1)) {
         throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
@@ -89,7 +101,7 @@ function cliMain($arguments) {
                 validateTsvHeader($out_dir . $name, $name);
             }
         }
-        if ($actions['-p'] || $actions['-t']) {
+        if ($actions['-p'] || $actions['-t'] || $country_action) {
             if (empty($config['DATABASE_URL']) || !is_string($config['DATABASE_URL'])) {
                 throw new RuntimeException('DATABASE_URL must be configured.');
             }
@@ -100,6 +112,13 @@ function cliMain($arguments) {
                     throw new RuntimeException('Unsupported database driver.');
                 }
                 $is_sqlite = $params['driver'] === 'pdo_sqlite';
+            } catch (Throwable $error) {
+                throw new RuntimeException('Database connection failed. Check DATABASE_URL and the PDO extension.');
+            }
+            if (($country_action || $countries_enabled) && !$is_sqlite) {
+                throw new RuntimeException('Wikidata countries require SQLite; legacy MySQL is not supported.');
+            }
+            try {
                 if ($is_sqlite && !empty($params['path'])) {
                     $db_dir = dirname($params['path']);
                     if (!is_dir($db_dir) && !@mkdir($db_dir, 0777, true) && !is_dir($db_dir)) {
@@ -111,14 +130,27 @@ function cliMain($arguments) {
                 throw new RuntimeException('Database connection failed. Check DATABASE_URL and the PDO extension.');
             }
             ensureSchema($conn, $is_sqlite);
-            if ($actions['-t']) {
-                $conn->executeStatement($is_sqlite ? 'DELETE FROM title' : 'TRUNCATE TABLE title');
-                echo "Cleared title table.\n";
-            }
-            if ($actions['-p']) {
-                foreach ($datasets as $name => $url) {
-                    $result = importDataset($conn, $out_dir . $name, $name, $portion, $completed_year);
-                    printf("%s: processed=%d committed=%d skipped=%d unmatched=%d queries=%d elapsed=%.3fs\n", $name, $result['processed'], $result['committed'], $result['skipped'], $result['unmatched'], $result['queries'], $result['elapsed']);
+            if ($actions['--migrate-countries']) {
+                $backup = migrateCountrySchema($conn, $params['path'] ?? '');
+                echo $backup === null ? "Country migration already applied.\n" : "Country migration complete; backup=$backup\n";
+            } elseif ($actions['--countries']) {
+                $stats = syncStoredCountries($conn, $country_settings, $country_limit);
+                printf("countries: checked=%d known=%d unknown=%d\n", $stats['checked'], $stats['known'], $stats['unknown']);
+            } else {
+                if ($actions['-p'] && $countries_enabled) {
+                    assertCountrySchema($conn);
+                    $stats = syncCountryDataset($conn, $out_dir . 'title.basics.tsv', $completed_year, $country_settings);
+                    printf("countries: checked=%d known=%d unknown=%d\n", $stats['checked'], $stats['known'], $stats['unknown']);
+                }
+                if ($actions['-t']) {
+                    $conn->executeStatement($is_sqlite ? 'DELETE FROM title' : 'TRUNCATE TABLE title');
+                    echo "Cleared title table.\n";
+                }
+                if ($actions['-p']) {
+                    foreach ($datasets as $name => $url) {
+                        $result = importDataset($conn, $out_dir . $name, $name, $portion, $completed_year, $countries_enabled ? $country_settings['excluded'] : null);
+                        printf("%s: processed=%d committed=%d skipped=%d unmatched=%d country_skipped=%d country_unknown=%d queries=%d elapsed=%.3fs\n", $name, $result['processed'], $result['committed'], $result['skipped'], $result['unmatched'], $result['country_skipped'], $result['country_unknown'], $result['queries'], $result['elapsed']);
+                    }
                 }
             }
         }

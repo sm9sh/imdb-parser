@@ -35,13 +35,13 @@ Interfaces: countrySettings(array), assertCountrySchema(conn), migrateCountrySch
 Files: modify run.php, lib/importer.php, config.php.example, tests/bootstrap.php; create tests/CountryCliTest.php.
 Interfaces: completedTitle(row,year), syncCountryDataset(conn,path,year,settings), syncStoredCountries(conn,settings,limit), countryExclusionSql(codes).
 
-- [ ] Write failing CLI tests for --migrate-countries, --countries/--country-limit, help, missing migration, India/co-production/unknown import and repeated ratings.
-- [ ] Run .tools/php-8.2/php.exe tests/CountryCliTest.php; expect unknown flags or missing filter.
-- [ ] Add standalone migration/country actions and validate settings before side effects.
-- [ ] Prefetch eligible basics IDs in a streaming pass before clearing or writing title.
-- [ ] At basics flush, query excluded tconst for at most 100 pending rows; remove excluded rows before beginning/advancing the transaction. Ratings add a parameterized NOT EXISTS country predicate.
-- [ ] Test -t -p failure preservation, invalid config, cached unknowns, rollback with skipped countries and legacy MySQL rejection.
-- [ ] Run both country files and tests/run.php; commit named task files.
+- [x] Write failing CLI tests for --migrate-countries, --countries/--country-limit, help, missing migration, India/co-production/unknown import and repeated ratings.
+- [x] Run .tools/php-8.2/php.exe tests/CountryCliTest.php; expect unknown flags or missing filter.
+- [x] Add standalone migration/country actions and validate settings before side effects.
+- [x] Prefetch eligible basics IDs in a streaming pass before clearing or writing title.
+- [x] At basics flush, query excluded tconst for at most 100 pending rows; remove excluded rows before beginning/advancing the transaction. Ratings add a parameterized NOT EXISTS country predicate.
+- [x] Test -t -p failure preservation, invalid config, cached unknowns, rollback with skipped countries and legacy MySQL rejection.
+- [x] Run both country files and tests/run.php; commit named task files.
 
 ## Task 3: Verification, documentation and activation
 Files: update README.md, PLAN.md and this plan/spec status.
@@ -54,4 +54,4 @@ Files: update README.md, PLAN.md and this plan/spec status.
 - [ ] Commit verified changes; report measured sample coverage, remaining full backfill and backup path.
 
 ## Execution Record
-Task 1: country module RED (missing functions) -> GREEN, 9 country scenarios passed; baseline plus task suite 50/50 passed in 12 files. Task 2 CLI tests are currently RED by design. Full 612k-title country backfill remains a separate long-running operation.
+Task 1: country module RED (missing functions) -> GREEN, 9 country scenarios passed; baseline plus task suite 50/50 passed in 12 files. Task 2: 10 CLI scenarios RED (unknown flags, missing filter/preflight) -> GREEN. Official Wikidata SomeValue blank-node/Skolem forms exposed a parser failure; added regression RED -> GREEN without guessing country codes. Full suite 61/61 scenarios in 13 files passed; all changed PHP files linted; diff whitespace clean. Full 612k-title country backfill remains a separate long-running operation.
