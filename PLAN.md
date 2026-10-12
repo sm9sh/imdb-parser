@@ -196,3 +196,11 @@ Evidence: `db/completed-filter-20261011-88b3bf20/result.json` та `verification
 - [ ] Повний backfill 611 986 stored titles: `.\run.bat --countries`; це окрема тривала фаза, ще не виконана. Coverage limited sample: 104 checked, 49 known, 55 unknown, 50 country rows.
 
 Source commits: `879c04f`, `2eaea94`. Operational evidence: `db/wikidata-countries-20261012/`. Country selection SQL і commands наведено в README. Дані спільноти Wikidata не гарантують повного покриття, тому unknown result не підтверджує відсутність Індії.
+
+## Повний country backfill — запуск 2026-10-12
+
+За прямим запитом користувача запущено заповнення країн для всіх 612 090 stored titles. Свіжі country lookups повторно не запитуються. Before fingerprint: b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; quick_check=ok. Початковий cache цього запуску мав 1604 checked IDs.
+
+CLI attempt 1 зберіг 9600 нових результатів до HTTP429/Retry-After120. Для тривалого процесу запущено окремий hidden worker: `db/country-backfill-20261012-172759/runner.php`. Він викликає existing `run.php --countries`, дотримується повного cooldown і продовжує з cache. Attempt 2 зберіг ще4100 результатів; auto cooldown та auto resume на attempt3 перевірено. Snapshot status 2026-10-12T14:46:24Z:15404 checked/12970known, stage=running. Процес ще не завершено.
+
+Live status: `db/country-backfill-20261012-172759/status.json`; logs: `sync-N.log`, `error-N.log`. Після успіху worker запише `result.json` лише якщо всі stored titles мають fresh lookup, title count/fingerprint збігаються з before та quick_check=ok. Unknown країни лишаються unknown; existing Indian titles не видаляються. Три consecutive attempts без прогресу або permanent error дають stage=failed із diagnostic; успішні batches зберігаються. Dataset/config/runtime й working database лишаються ignored; product source не змінено.
