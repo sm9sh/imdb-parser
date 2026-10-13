@@ -115,10 +115,20 @@ function assertSqliteSchema($conn) {
     }
 }
 
-function importDataset($conn, $path, $dataset, $portion) {
+function completedTitle($row, $year) {
+    return $year === null ||
+        ($row['titleType'] === 'movie' && $row['startYear'] !== null && $row['startYear'] <= $year) ||
+        (in_array($row['titleType'], ['tvSeries', 'tvMiniSeries'], true) && $row['endYear'] !== null && $row['endYear'] <= $year);
+}
+
+function importDataset($conn, $path, $dataset, $portion, $completed_year = null, $country_codes = null) {
     if (!is_int($portion) || $portion < 1) {
         throw new RuntimeException('TRANSACTION_PORTION must be a positive integer.');
     }
+    if ($completed_year !== null && (!is_int($completed_year) || $completed_year < 1 || $completed_year > 9999)) {
+        throw new RuntimeException('Completion year must be an integer from 1 to 9999.');
+    }
+    if ($country_codes !== null) { assertCountrySchema($conn); }
     validateTsvHeader($path, $dataset);
     $sqlite = $conn->getDatabasePlatform()->getName() === 'sqlite';
     $basics = $dataset === 'title.basics.tsv';
@@ -129,12 +139,18 @@ function importDataset($conn, $path, $dataset, $portion) {
             $updates[] = $field . '=' . ($sqlite ? 'excluded.' . $field : 'VALUES(' . $field . ')');
         }
     }
+    $rating_filter = $completed_year === null ? '' :
+        " AND ((titleType='movie' AND startYear<=?) OR (titleType IN ('tvSeries', 'tvMiniSeries') AND endYear<=?))";
+    [$country_sql, $country_parameters] = $country_codes === null ? ['0', []] : countryExclusionSql($country_codes);
+    if ($country_codes !== null) {
+        $rating_filter .= ' AND NOT EXISTS (SELECT 1 FROM title_country tc WHERE tc.tconst=title.tconst AND (' . $country_sql . '))';
+    }
     $statement = $exists = null;
     $prepared_count = 0;
     if (!$sqlite && !$basics) {
-        $exists = $conn->prepare('SELECT 1 FROM title WHERE tconst=?');
+        $exists = $conn->prepare('SELECT 1 FROM title WHERE tconst=?' . $rating_filter);
     }
-    $processed = $committed = $batch = $unmatched = $queries = 0;
+    $processed = $committed = $batch = $skipped = $unmatched = $queries = $country_skipped = $country_unknown = 0;
     $pending = [];
     $pending_bytes = 0;
     $started = microtime(true);
@@ -142,7 +158,26 @@ function importDataset($conn, $path, $dataset, $portion) {
     // At most 900 bound parameters, below SQLite's historical 999 limit.
     $row_limit = $basics ? 100 : 1;
     $byte_limit = 262144;
-    $flush = function () use ($conn, $sqlite, $basics, $fields, $updates, $portion, $dataset, &$statement, &$prepared_count, $exists, &$pending, &$pending_bytes, &$processed, &$committed, &$batch, &$unmatched, &$queries) {
+    $flush = function () use ($conn, $sqlite, $basics, $fields, $updates, $portion, $dataset, $completed_year, $rating_filter, $country_codes, $country_sql, $country_parameters, &$skipped, &$country_skipped, &$country_unknown, &$statement, &$prepared_count, $exists, &$pending, &$pending_bytes, &$processed, &$committed, &$batch, &$unmatched, &$queries) {
+        if ($basics && $country_codes !== null && $pending) {
+            $ids = array_values(array_unique(array_column($pending, 'tconst')));
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $queries++;
+            $rows = $conn->fetchAllAssociative('SELECT tc.tconst, MAX(CASE WHEN ' . $country_sql . ' THEN 1 ELSE 0 END) AS blocked FROM title_country tc WHERE tc.tconst IN (' . $placeholders . ') GROUP BY tc.tconst', array_merge($country_parameters, $ids));
+            $known = array_column($rows, 'blocked', 'tconst');
+            $selected = [];
+            foreach ($pending as $row) {
+                if (isset($known[$row['tconst']]) && (int) $known[$row['tconst']] === 1) {
+                    $skipped++;
+                    $country_skipped++;
+                } else {
+                    if (!isset($known[$row['tconst']])) { $country_unknown++; }
+                    $selected[] = $row;
+                }
+            }
+            $pending = $selected;
+            $pending_bytes = 0;
+        }
         $count = count($pending);
         if ($count === 0) {
             return;
@@ -161,7 +196,7 @@ function importDataset($conn, $path, $dataset, $portion) {
                     ($sqlite ? ' ON CONFLICT(tconst) DO UPDATE SET ' : ' ON DUPLICATE KEY UPDATE ') .
                     implode(', ', $updates) . ', updated=CURRENT_TIMESTAMP';
             } else {
-                $sql = 'UPDATE title SET averageRating=?, numVotes=?, updated=CURRENT_TIMESTAMP WHERE tconst=?';
+                $sql = 'UPDATE title SET averageRating=?, numVotes=?, updated=CURRENT_TIMESTAMP WHERE tconst=?' . $rating_filter;
             }
             $statement = $conn->prepare($sql);
             $prepared_count = $count;
@@ -174,6 +209,11 @@ function importDataset($conn, $path, $dataset, $portion) {
                 }
             } else {
                 $parameters = [$row['averageRating'], $row['numVotes'], $row['tconst']];
+                if ($completed_year !== null) {
+                    $parameters[] = $completed_year;
+                    $parameters[] = $completed_year;
+                }
+                $parameters = array_merge($parameters, $country_parameters);
             }
         }
         $queries++;
@@ -181,7 +221,7 @@ function importDataset($conn, $path, $dataset, $portion) {
         if (!$basics && $statement->rowCount() === 0) {
             if ($exists !== null) {
                 $queries++;
-                $exists->execute([$pending[0]['tconst']]);
+                $exists->execute($completed_year === null ? [$pending[0]['tconst']] : [$pending[0]['tconst'], $completed_year, $completed_year]);
             }
             if ($exists === null || !$exists->fetchColumn()) {
                 $unmatched++;
@@ -203,6 +243,10 @@ function importDataset($conn, $path, $dataset, $portion) {
     try {
         foreach (readTsv($path, $dataset) as $number => $row) {
             $last_line = $number;
+            if ($basics && !completedTitle($row, $completed_year)) {
+                $skipped++;
+                continue;
+            }
             $bytes = 0;
             foreach ($row as $value) {
                 $bytes += strlen((string) $value);
@@ -221,7 +265,7 @@ function importDataset($conn, $path, $dataset, $portion) {
             $conn->commit();
             $committed += $batch;
         }
-        return ['processed' => $processed, 'committed' => $committed, 'unmatched' => $unmatched, 'queries' => $queries, 'elapsed' => microtime(true) - $started];
+        return ['processed' => $processed, 'committed' => $committed, 'skipped' => $skipped, 'unmatched' => $unmatched, 'country_skipped' => $country_skipped, 'country_unknown' => $country_unknown, 'queries' => $queries, 'elapsed' => microtime(true) - $started];
     } catch (Throwable $error) {
         if ($conn->isTransactionActive()) {
             $conn->rollBack();

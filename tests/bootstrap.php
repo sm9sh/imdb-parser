@@ -27,6 +27,9 @@ function testConfig($directory, $settings = []) {
         'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', $directory) . '/db/imdb.sqlite',
         'DOWNLOAD_DIR' => $directory . '/exchange',
         'TRANSACTION_PORTION' => 2,
+        // Keep the original full-dataset regression fixtures explicit.
+        'IMPORT_COMPLETED_ONLY' => false,
+        'WIKIDATA_COUNTRIES_ENABLED' => false,
     ], $settings);
     file_put_contents($directory . '/config.php', '<?php return ' . var_export($config, true) . ';');
 }
@@ -35,6 +38,12 @@ function testCli($directory, ...$arguments) {
     if (in_array('-d', $arguments, true) || in_array('-a', $arguments, true)) {
         $settings = require $directory . '/config.php';
         expect(parse_url($settings['DATASET_BASE_URL'] ?? '', PHP_URL_HOST) === '127.0.0.1', 'HTTP tests must use the local fixture server.');
+    }
+    if (is_file($directory . '/config.php') && (in_array('-p', $arguments, true) || in_array('-a', $arguments, true) || in_array('--countries', $arguments, true))) {
+        $settings = require $directory . '/config.php';
+        if (($settings['WIKIDATA_COUNTRIES_ENABLED'] ?? false) === true || in_array('--countries', $arguments, true)) {
+            expect(parse_url($settings['WIKIDATA_ENDPOINT'] ?? '', PHP_URL_HOST) === '127.0.0.1', 'Country HTTP tests must use the local fixture server.');
+        }
     }
     $process = proc_open(array_merge([PHP_BINARY, '-d', 'error_reporting=' . E_ALL, '-d', 'display_errors=1', '-d', 'log_errors=0', $directory . '/run.php'], $arguments), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory);
     expect(is_resource($process), 'Could not start CLI.');

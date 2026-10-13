@@ -3,6 +3,12 @@
 return [
     'DATABASE_URL' => 'sqlite:///' . str_replace('\\', '/', __DIR__) . '/db/imdb.sqlite',
     'TRANSACTION_PORTION' => 2000,
+    'IMPORT_COMPLETED_ONLY' => true,
+    // Run --migrate-countries before enabling country mode.
+    'WIKIDATA_COUNTRIES_ENABLED' => false,
+    'EXCLUDE_COUNTRIES' => ['IN'],
+    'WIKIDATA_REFRESH_DAYS' => 30,
+    'WIKIDATA_ENDPOINT' => 'https://query.wikidata.org/sparql',
     'CONNECT_TIMEOUT' => 10,
     'TRANSFER_TIMEOUT' => 3600,
     'DOWNLOAD_RETRIES' => 2,

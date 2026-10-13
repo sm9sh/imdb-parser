@@ -10,7 +10,7 @@
 
 Нові datasets, API, UI та автоматичний scheduler не входять у цей план. Імпорт додає й оновлює записи; відсутність запису в наступному dataset не означає його видалення. Ratings оновлюються для наявних titles; unmatched ratings рахуються окремо, без створення неповних titles.
 
-Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 36 сценаріїв у 10 test files. Усі етапи завершено. Повний import і repeat пройшли; усі поля обох datasets незалежно звірено за tconst. Результати — у `docs/import-benchmark.md`. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
+Основна база за уточненням користувача від 2026-10-07 — `db/imdb.sqlite`. SQLite CLI, parser, upsert, rollback, process lock та безпечні file operations реалізовано. Suite перевіряє 41 сценарій у 11 test files. Поточний відбір і очищення робочої бази описано в секції від 2026-10-11. Усі етапи завершено. Повний import і repeat без фільтра пройшли; усі поля обох datasets незалежно звірено за tconst. Результати — у `docs/import-benchmark.md`. MySQL configuration доступна як попередній backend. Поточне середовище: PHP 8.2.34 у `.tools/php-8.2/`, SQLite 3.53.4, DBAL 2.13.9. Composer requirement — `^8.2`; `run.bat` обирає локальний runtime, PhpStorm language level — 8.2. Локальний `composer.lock` синхронізовано; він залишається untracked. PHP 8.2 lint, platform requirements, SQLite integration test з `E_ALL`, project launcher та HTTPS HEAD до IMDb пройшли. Попередні PDO deprecation notices усунуто в перевірених сценаріях. Composer попереджає про abandoned `doctrine/cache`; зміна major version DBAL виходить за цю доробку й залишається окремим рішенням.
 
 ## Початковий огляд MySQL backend
 
@@ -158,3 +158,57 @@
 На момент завершення ізольованих перевірок working `db/imdb.sqlite` залишався порожнім: automatic approval review відхилив прямий full import через масштабні additions/overwrites. Після запиту користувача «повтори» виконано working import із backup початкової бази: `db/imdb-before-import-20261007-193755-34767e.sqlite` (0 titles, 24576 bytes; backup quick_check = ok).
 
 Перший working import завершився з помилкою запису після 7028000 committed basics; поточні 100 rows відкочено. Причину не підтверджено: ті самі rows пройшли rollback-only проби, а база після failure мала quick_check = ok. Другий запуск завершився з exit 0 без змін production code: 8701401 basics / 1215671 ratings, unmatched 0, elapsed 2792.608 s, PHP peak 4 MiB. Незалежна read-only звірка всіх 9/3 source fields за tconst пройшла за 583.552 s: counts і NULL counts збігаються, partial ratings 0, quick_check = ok. Working database має 1571422208 bytes. Logs збережено в `db/import-20261007-b64026fe/`. Push і PR не виконувалися.
+
+2026-10-09: повторний cleanup прибрав початковий `.superpowers/working-import-b64026fe/` через переміщення до `db/import-20261007-b64026fe/diagnostic-workspace/`. Усі 23 files збережено без змін; перед move створено ZIP-копію з перевіркою SHA-256 кожного файла. Recursive delete знову відхилив automatic approval review (`blocked by policy` без докладної причини), тому files залишено в ignored evidence directory. Working database і backup metadata не змінилися. Production code не змінювався.
+
+## Відбір завершених фільмів і серіалів — 2026-10-11
+
+За уточненням користувача CLI тепер за замовчуванням імпортує лише:
+
+- `movie` з відомим `startYear` не пізніше поточного року;
+- `tvSeries` і `tvMiniSeries` з відомим `endYear` не пізніше поточного року.
+
+Рік визначається один раз на запуск. Дані дають лише роки, тому відбір не підтверджує точну дату виходу або фіналу. Архіви IMDb завантажуються повністю; фільтр діє під час import. `IMPORT_COMPLETED_ONLY` має boolean value і default `true` навіть у попередньому config без цього ключа; `false` явно повертає повний import. Schema не змінюється.
+
+- [x] Basics пропускає інші типи, невідомі потрібні роки та майбутні роки до формування batches. Summary містить `skipped`.
+- [x] Ratings оновлює лише відповідні наявні titles. `unmatched` включає відсутні або невідповідні записи. Для ratings processed/committed включає unmatched rows; це не кількість змінених titles.
+- [x] Нові фільтри перевірено RED → GREEN. Усі 41 сценарій у 11 test files пройшли на PHP 8.2.34, включно з year boundaries, default config, repeat, збереженням виключених ratings та rollback із пропущеними рядками. Lint змінених PHP files і help пройшли.
+- [x] За прямим запитом користувача робочу базу очищено окремою транзакцією, потім виконано `VACUUM`. Звичайний `-p`/`-a` автоматично не видаляє попередні записи поза фільтром.
+
+До очищення: 8 701 401 titles, 1 571 422 208 bytes. Створено consistent backup через `VACUUM INTO`: `db/completed-filter-20261011-88b3bf20/imdb-before-completed-filter.sqlite` (1 381 228 544 bytes). Backup counts збігаються; `quick_check = ok`.
+
+Видалено 8 089 311 titles. Залишилося 612 090: 524 415 movies, 69 285 tvSeries і 18 390 tvMiniSeries; 311 421 мають ratings. SHA-256 усіх збережених полів за tconst до DELETE, після DELETE та після VACUUM збігається. Поточний файл має 97 026 048 bytes (92.531 MiB замість 1498.625 MiB). Незалежна read-only перевірка підтвердила invalid rows 0, partial ratings 0, free pages 0 і `quick_check = ok`.
+
+Evidence: `db/completed-filter-20261011-88b3bf20/result.json` та `verification.json`. Backup, database й допоміжні scripts залишаються ignored. Раніші full-import вимірювання стосуються версії без фільтра; їх не повторювали для нової політики.
+
+## Країни з Wikidata та виключення Індії — 2026-10-12
+
+Реалізовано окремий country cache за IMDb ID P345, country of origin P495 та optional ISO P297. IMDb лишається джерелом basics/ratings. Country mode не змінює попередній completion filter. Country rows зберігаються за QID, включно з co-productions і historical countries без ISO. SomeValue blank nodes/Skolem URIs означають невідоме значення.
+
+- [x] Explicit `--migrate-countries`: verified backup, дві таблиці та indexes, повторна migration без змін.
+- [x] `--countries [--country-limit=N]`: послідовні batches до 100 IDs, 30-day positive/negative cache, повторний запуск пропускає fresh entries. Malformed/incomplete/HTTP failure не стає unknown; batch replacement атомарний.
+- [x] При `-p`/`-a` country preflight завершується до title transactions та `-t`. Q668 або IN виключає basics та ratings, включно з co-productions. Unknown titles зберігаються. Existing Indian titles автоматично не видалено.
+- [x] Tests RED -> GREEN: 10 country і 11 CLI scenarios; final full suite 62/62 у 13 files, PHP lint та diff whitespace пройшли.
+- [x] Working migration backup: `db/imdb-before-countries-20261012-140621-e5dc9d1a.sqlite`. SHA-256 усіх title fields before/backup/after збігається; 612 090 titles і 311 421 rated records збережено; `quick_check = ok`.
+- [x] CLI live pilot: 100 checked, 45 known, 55 unknown, 1.285 s. Додаткові 4 приклади дали Q668/IN для tt1187043, tt5074352, tt8178634 та Q30/US + Q408/AU для tt0133093; повторний lookup використав cache без HTTP.
+- [x] Ignored local config активовано: `WIKIDATA_COUNTRIES_ENABLED => true`, `EXCLUDE_COUNTRIES => ['IN']`.
+- [x] Final independent review: одна P2 finding про скорочений Retry-After. Numeric/date headers понад 60 s тепер завершують процес із required delay без early retry; regression RED -> GREEN. Critical/Minor findings немає.
+- [x] Повний country backfill завершено 2026-10-13 о 00:09 за Europe/Kiev. Усі 612 090 titles перевірено; 246 465 мають країни, 365 625 мають успішний unknown lookup. Missing/stale lookups: 0. Результати та незалежна перевірка наведені нижче.
+
+Source commits: `879c04f`, `2eaea94`. Operational evidence: `db/wikidata-countries-20261012/`. Country selection SQL і commands наведено в README. Дані спільноти Wikidata не гарантують повного покриття, тому unknown result не підтверджує відсутність Індії.
+
+## Повний country backfill — запуск 2026-10-12
+
+За прямим запитом користувача запущено заповнення країн для всіх 612 090 stored titles. Свіжі country lookups повторно не запитуються. Before fingerprint: b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; quick_check=ok. Початковий cache цього запуску мав 1604 checked IDs.
+
+CLI attempt 1 зберіг 9600 нових результатів до HTTP429/Retry-After120. Для тривалого процесу запущено окремий hidden worker: `db/country-backfill-20261012-172759/runner.php`. Він викликає existing `run.php --countries`, дотримується повного cooldown і продовжує з cache. Attempt 2 зберіг ще4100 результатів; auto cooldown та auto resume на attempt3 перевірено. Проміжний snapshot 2026-10-12T14:46:24Z:15404 checked/12970known, stage=running. На момент цього snapshot процес ще не завершився.
+
+Live status: `db/country-backfill-20261012-172759/status.json`; logs: `sync-N.log`, `error-N.log`. Після успіху worker запише `result.json` лише якщо всі stored titles мають fresh lookup, title count/fingerprint збігаються з before та quick_check=ok. Unknown країни лишаються unknown; existing Indian titles не видаляються. Три consecutive attempts без прогресу або permanent error дають stage=failed із diagnostic; успішні batches зберігаються. Dataset/config/runtime й working database лишаються ignored; product source не змінено.
+
+### Завершення та незалежна перевірка — 2026-10-13
+
+Worker завершився 2026-10-12T21:09:28Z (2026-10-13 00:09:28 Europe/Kiev), після 39 CLI attempts. Усі 612 090 stored titles мають fresh lookup: країни знайдено для 246 465 (40,27%); для 365 625 Wikidata не повернула відому країну. Збережено 274 163 country rows із 316 різними QIDs, включно з історичними entities. Індія Q668/IN присутня у 24 209 titles, включно з co-productions; ці titles не видалено.
+
+Незалежна read-only звірка поточної SQLite 2026-10-13 підтвердила ці counts, missing/stale lookups=0 та country rows без lookup=0. SHA-256 усіх полів title за tconst збігається з before fingerprint b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; усі titles і ratings збережено. PRAGMA quick_check=ok. Повне покриття lookup не означає, що Wikidata має країну для кожного title; country selection охоплює лише titles з відомими country QIDs/codes.
+
+Final evidence: `db/country-backfill-20261012-172759/result.json`, `status.json`, `before.json` та logs. Database, config і operational scripts залишаються ignored. Product source у цій фазі не змінено.
