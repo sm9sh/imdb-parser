@@ -193,7 +193,7 @@ Evidence: `db/completed-filter-20261011-88b3bf20/result.json` та `verification
 - [x] CLI live pilot: 100 checked, 45 known, 55 unknown, 1.285 s. Додаткові 4 приклади дали Q668/IN для tt1187043, tt5074352, tt8178634 та Q30/US + Q408/AU для tt0133093; повторний lookup використав cache без HTTP.
 - [x] Ignored local config активовано: `WIKIDATA_COUNTRIES_ENABLED => true`, `EXCLUDE_COUNTRIES => ['IN']`.
 - [x] Final independent review: одна P2 finding про скорочений Retry-After. Numeric/date headers понад 60 s тепер завершують процес із required delay без early retry; regression RED -> GREEN. Critical/Minor findings немає.
-- [ ] Повний backfill 611 986 stored titles: `.\run.bat --countries`; це окрема тривала фаза, ще не виконана. Coverage limited sample: 104 checked, 49 known, 55 unknown, 50 country rows.
+- [x] Повний country backfill завершено 2026-10-13 о 00:09 за Europe/Kiev. Усі 612 090 titles перевірено; 246 465 мають країни, 365 625 мають успішний unknown lookup. Missing/stale lookups: 0. Результати та незалежна перевірка наведені нижче.
 
 Source commits: `879c04f`, `2eaea94`. Operational evidence: `db/wikidata-countries-20261012/`. Country selection SQL і commands наведено в README. Дані спільноти Wikidata не гарантують повного покриття, тому unknown result не підтверджує відсутність Індії.
 
@@ -201,6 +201,14 @@ Source commits: `879c04f`, `2eaea94`. Operational evidence: `db/wikidata-countri
 
 За прямим запитом користувача запущено заповнення країн для всіх 612 090 stored titles. Свіжі country lookups повторно не запитуються. Before fingerprint: b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; quick_check=ok. Початковий cache цього запуску мав 1604 checked IDs.
 
-CLI attempt 1 зберіг 9600 нових результатів до HTTP429/Retry-After120. Для тривалого процесу запущено окремий hidden worker: `db/country-backfill-20261012-172759/runner.php`. Він викликає existing `run.php --countries`, дотримується повного cooldown і продовжує з cache. Attempt 2 зберіг ще4100 результатів; auto cooldown та auto resume на attempt3 перевірено. Snapshot status 2026-10-12T14:46:24Z:15404 checked/12970known, stage=running. Процес ще не завершено.
+CLI attempt 1 зберіг 9600 нових результатів до HTTP429/Retry-After120. Для тривалого процесу запущено окремий hidden worker: `db/country-backfill-20261012-172759/runner.php`. Він викликає existing `run.php --countries`, дотримується повного cooldown і продовжує з cache. Attempt 2 зберіг ще4100 результатів; auto cooldown та auto resume на attempt3 перевірено. Проміжний snapshot 2026-10-12T14:46:24Z:15404 checked/12970known, stage=running. На момент цього snapshot процес ще не завершився.
 
 Live status: `db/country-backfill-20261012-172759/status.json`; logs: `sync-N.log`, `error-N.log`. Після успіху worker запише `result.json` лише якщо всі stored titles мають fresh lookup, title count/fingerprint збігаються з before та quick_check=ok. Unknown країни лишаються unknown; existing Indian titles не видаляються. Три consecutive attempts без прогресу або permanent error дають stage=failed із diagnostic; успішні batches зберігаються. Dataset/config/runtime й working database лишаються ignored; product source не змінено.
+
+### Завершення та незалежна перевірка — 2026-10-13
+
+Worker завершився 2026-10-12T21:09:28Z (2026-10-13 00:09:28 Europe/Kiev), після 39 CLI attempts. Усі 612 090 stored titles мають fresh lookup: країни знайдено для 246 465 (40,27%); для 365 625 Wikidata не повернула відому країну. Збережено 274 163 country rows із 316 різними QIDs, включно з історичними entities. Індія Q668/IN присутня у 24 209 titles, включно з co-productions; ці titles не видалено.
+
+Незалежна read-only звірка поточної SQLite 2026-10-13 підтвердила ці counts, missing/stale lookups=0 та country rows без lookup=0. SHA-256 усіх полів title за tconst збігається з before fingerprint b33f6fae991720ca2b5947975e57a3fbda0f78d05a310b842442ee286e06fb6a; усі titles і ratings збережено. PRAGMA quick_check=ok. Повне покриття lookup не означає, що Wikidata має країну для кожного title; country selection охоплює лише titles з відомими country QIDs/codes.
+
+Final evidence: `db/country-backfill-20261012-172759/result.json`, `status.json`, `before.json` та logs. Database, config і operational scripts залишаються ignored. Product source у цій фазі не змінено.
